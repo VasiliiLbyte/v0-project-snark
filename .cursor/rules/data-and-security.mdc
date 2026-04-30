@@ -1,0 +1,73 @@
+---
+description: Data models, auth/session policies, and security requirements
+alwaysApply: true
+---
+
+# 🔐 ДАННЫЕ, БЕЗОПАСНОСТЬ И РОЛИ
+
+## 👤 Модели данных (обязательные поля)
+```ts
+// types/auth.d.ts
+export type UserRole = 'admin' | 'hr_manager' | 'employee'
+export interface UserSession {
+  userId: string
+  email: string
+  role: UserRole
+  departmentId?: string
+  iat: number
+  exp: number
+}
+
+// types/employee.d.ts
+export interface Employee {
+  id: string
+  tabNumber?: string
+  firstName: string
+  lastName: string
+  position: string
+  department: string
+  managerId?: string
+  contacts: { email: string; phoneInternal: string; phoneMobile?: string }
+  status: 'active' | 'vacation' | 'remote' | 'dismissed'
+  vacation?: { from: string; to: string }
+  avatarUrl?: string
+}
+
+// types/document.d.ts
+export interface Document {
+  id: string
+  title: string
+  category: 'policies' | 'instructions' | 'templates' | 'reports' | 'other'
+  version: string
+  accessLevel: 'public' | 'internal' | 'restricted'
+  file: { key: string; name: string; size: number; mimeType: string }
+  uploadedBy: string
+  createdAt: string
+}
+```
+
+## Аутентификация и сессии
+- Пароли: bcryptjs, saltRounds >= 12. Никогда не хранить в открытом виде.
+- Токены: JWT (access 15м, refresh 7д). Refresh-токен только в httpOnly; Secure; SameSite=Strict cookie.
+- Выход: очистка cookie на сервере + инвалидация refresh-токена в БД.
+- Сессия восстанавливается по refresh-токену автоматически. При истечении — редирект на /login.
+
+## 🛡️ Требования к безопасности (152-ФЗ)
+- Персональные данные доступны ТОЛЬКО авторизованным пользователям.
+- Доступ к accessLevel: 'restricted' документам проверяется на уровне API.
+- Логирование: фиксировать userId, timestamp, action, resourceId при просмотре карточек/документов.
+- Никаких `console.log(user)` или `console.log(token)` в production.
+- Все внешние ключи (S3, DB, SMTP) ТОЛЬКО в `.env.local`. В `.env.example` — заглушки.
+
+## ☁️ Файлы и S3
+- Загрузка через presigned URL (TTL <= 5 мин).
+- Валидация mimeType на сервере. Допустимые: pdf, docx, xlsx, jpg, png.
+- Лимит: 50 МБ на файл, 10 МБ на аватар.
+- Предпросмотр: только для pdf, jpg, png. Остальные — кнопка скачивания.
+
+## ✅ Валидация
+- Все входные данные (формы, query, body) проверяются через zod.
+- Схемы валидации выносятся в `lib/validators/`.
+- Ошибки валидации возвращаются в формате `{ field: string, message: string }[]`.
+
+> 💡 НИКОГДА не передавай чувствительные данные в клиентский бандл. Проверяй права доступа на сервере ДВАЖДЫ: перед запросом к БД и перед отдачей ответа.
