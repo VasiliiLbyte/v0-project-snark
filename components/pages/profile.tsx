@@ -17,28 +17,18 @@ import {
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
+import type { ProfileData } from '@/types/portal'
 
-const tabs = [
-  { id: 'tasks', label: 'Задачи', icon: CheckCircle },
-  { id: 'vacation', label: 'Отпуск', icon: Calendar },
-  { id: 'evaluations', label: 'Оценки', icon: Award },
-  { id: 'kpi', label: 'KPI / РМТО', icon: Wallet },
-  { id: 'payslips', label: 'Расчётные листы', icon: FileText },
-]
+const tabIconMap = {
+  CheckCircle,
+  Calendar,
+  Award,
+  Wallet,
+  FileText,
+} as const
 
-const tasks = [
-  { id: 1, title: 'Согласовать проектную документацию', system: 'Документооборот', deadline: 'Сегодня', priority: 'high', status: 'В работе' },
-  { id: 2, title: 'Подготовить отчёт по проекту КС-2', system: 'BPMS', deadline: 'Завтра', priority: 'medium', status: 'Новая' },
-  { id: 3, title: 'Провести технический аудит объекта', system: 'BPMS', deadline: '3 мая', priority: 'low', status: 'Запланирована' },
-]
-
-const vacations = [
-  { id: 1, start: '15.06.2024', end: '28.06.2024', days: 14, status: 'approved', type: 'Ежегодный' },
-  { id: 2, start: '23.12.2024', end: '08.01.2025', days: 14, status: 'pending', type: 'Ежегодный' },
-]
-
-export function Profile() {
-  const [activeTab, setActiveTab] = useState('tasks')
+export function Profile({ data }: { data: ProfileData }) {
+  const [activeTab, setActiveTab] = useState<ProfileData["tabs"][number]["id"]>('tasks')
 
   return (
     <div className="space-y-6">
@@ -49,7 +39,7 @@ export function Profile() {
             {/* Avatar */}
             <div className="relative">
               <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white/20 text-2xl font-bold text-white md:h-24 md:w-24">
-                ИП
+                {data.initials}
               </div>
               <button className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full bg-accent text-white shadow-lg transition-transform hover:scale-110">
                 <Camera className="h-4 w-4" />
@@ -62,21 +52,21 @@ export function Profile() {
 
             {/* Info */}
             <div className="text-center md:text-left">
-              <h1 className="text-2xl font-bold text-white">Иван Петров</h1>
-              <p className="text-white/80">Руководитель проекта</p>
-              <p className="text-sm text-white/60">СНАРК | Инжиниринг</p>
+              <h1 className="text-2xl font-bold text-white">{data.fullName}</h1>
+              <p className="text-white/80">{data.roleTitle}</p>
+              <p className="text-sm text-white/60">{data.department}</p>
               <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-sm text-white/70 md:justify-start">
                 <span className="flex items-center gap-1">
                   <Phone className="h-4 w-4" />
-                  +7 (495) 123-45-67
+                  {data.phone}
                 </span>
                 <span className="flex items-center gap-1">
                   <Mail className="h-4 w-4" />
-                  i.petrov@snark.ru
+                  {data.email}
                 </span>
                 <span className="flex items-center gap-1">
                   <MapPin className="h-4 w-4" />
-                  Головной офис, каб. 301
+                  {data.office}
                 </span>
               </div>
             </div>
@@ -85,7 +75,7 @@ export function Profile() {
             <div className="md:ml-auto">
               <span className="inline-flex items-center gap-2 rounded-full bg-success/20 px-4 py-2 text-sm font-medium text-white">
                 <span className="h-2 w-2 rounded-full bg-success" />
-                В офисе
+                {data.presence === 'office' ? 'В офисе' : data.presence === 'away' ? 'Отошёл' : 'Не в сети'}
               </span>
             </div>
           </div>
@@ -93,8 +83,8 @@ export function Profile() {
 
         {/* Tabs */}
         <div className="flex overflow-x-auto border-b border-border">
-          {tabs.map((tab) => {
-            const Icon = tab.icon
+          {data.tabs.map((tab) => {
+            const Icon = tabIconMap[tab.icon as keyof typeof tabIconMap] ?? CheckCircle
             return (
               <button
                 key={tab.id}
@@ -121,7 +111,7 @@ export function Profile() {
             <h2 className="font-bold text-card-foreground">Мои задачи</h2>
           </div>
           <div className="divide-y divide-border">
-            {tasks.map((task) => (
+            {data.tasks.map((task) => (
               <button
                 key={task.id}
                 className="flex w-full items-center gap-4 p-4 text-left transition-colors hover:bg-muted/50"
@@ -166,7 +156,7 @@ export function Profile() {
                 </button>
               </div>
               <div className="space-y-3">
-                {vacations.map((vacation) => (
+                {data.vacations.map((vacation) => (
                   <div
                     key={vacation.id}
                     className={cn(
@@ -249,7 +239,7 @@ export function Profile() {
             <h2 className="font-bold text-card-foreground">Расчётные листы</h2>
           </div>
           <div className="divide-y divide-border">
-            {['Апрель 2024', 'Март 2024', 'Февраль 2024', 'Январь 2024'].map((month) => (
+            {data.payslips.map((month) => (
               <div key={month} className="flex items-center justify-between p-4">
                 <div className="flex items-center gap-3">
                   <FileText className="h-5 w-5 text-secondary" />

@@ -9,45 +9,23 @@ import {
   Calendar,
   HelpCircle,
   BookOpen,
+  ShieldCheck,
   LogOut,
   ChevronRight,
   X,
 } from 'lucide-react'
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import type { UserRole } from "@/types/auth"
+import type { SidebarItem } from "@/types/portal"
 import { cn } from '@/lib/utils'
 
 interface SidebarProps {
   isOpen?: boolean
   onClose?: () => void
-  currentPage?: string
-  onNavigate?: (page: string) => void
+  role?: UserRole | null
+  items: SidebarItem[]
 }
-
-const menuItems = [
-  {
-    id: 'dashboard',
-    label: 'Главная',
-    icon: LayoutDashboard,
-    description: 'Дашборд',
-  },
-  {
-    id: 'employees',
-    label: 'Сотрудники',
-    icon: Users,
-    description: 'Справочник',
-  },
-  {
-    id: 'documents',
-    label: 'Документы',
-    icon: FileText,
-    description: 'Нормативная база',
-  },
-  {
-    id: 'profile',
-    label: 'Мой профиль',
-    icon: User,
-    description: 'Личный кабинет',
-  },
-]
 
 const secondaryItems = [
   { id: 'about', label: 'О компании', icon: Building2 },
@@ -56,19 +34,30 @@ const secondaryItems = [
   { id: 'support', label: 'Поддержка', icon: HelpCircle },
 ]
 
+const iconMap = {
+  LayoutDashboard,
+  Users,
+  FileText,
+  User,
+  ShieldCheck,
+  Building2,
+  Calendar,
+  HelpCircle,
+  BookOpen,
+} as const
+
+function getIcon(iconName: SidebarItem["icon"]) {
+  return iconMap[iconName as keyof typeof iconMap] ?? LayoutDashboard
+}
+
 export function Sidebar({
   isOpen = false,
   onClose,
-  currentPage = 'dashboard',
-  onNavigate,
+  role,
+  items,
 }: SidebarProps) {
-  const handleNavigate = (id: string) => {
-    console.log('[v0] Sidebar handleNavigate called with id:', id)
-    console.log('[v0] onNavigate function exists:', !!onNavigate)
-    if (onNavigate) {
-      onNavigate(id)
-    }
-  }
+  const pathname = usePathname()
+  const menuItems = items.filter((item) => !item.roles || (role ? item.roles.includes(role) : false))
 
   return (
     <>
@@ -107,13 +96,13 @@ export function Sidebar({
             Основное
           </div>
           {menuItems.map((item) => {
-            const Icon = item.icon
-            const isActive = currentPage === item.id
+            const Icon = getIcon(item.icon)
+            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
             return (
-              <button
+              <Link
                 key={item.id}
-                type="button"
-                onClick={() => handleNavigate(item.id)}
+                href={item.href}
+                onClick={onClose}
                 className={cn(
                   'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-all duration-200',
                   isActive
@@ -127,7 +116,7 @@ export function Sidebar({
                   <div className="text-xs opacity-60">{item.description}</div>
                 </div>
                 {isActive && <ChevronRight className="h-4 w-4 shrink-0" />}
-              </button>
+              </Link>
             )
           })}
 
@@ -140,7 +129,7 @@ export function Sidebar({
               <button
                 key={item.id}
                 type="button"
-                onClick={() => handleNavigate(item.id)}
+                onClick={onClose}
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-sidebar-foreground/70 transition-colors hover:bg-sidebar-primary hover:text-sidebar-foreground"
               >
                 <Icon className="h-4 w-4 shrink-0" />

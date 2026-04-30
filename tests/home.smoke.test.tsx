@@ -1,46 +1,39 @@
-import { fireEvent, render, screen } from "@testing-library/react"
-import Home from "@/app/page"
-
-function clickSidebarItem(label: string) {
-  const node = screen
-    .getAllByText(label)
-    .find((element) => Boolean(element.closest("aside")))
-
-  if (!node) {
-    throw new Error(`Sidebar item not found: ${label}`)
-  }
-
-  const button = node.closest("button")
-  if (!button) {
-    throw new Error(`Sidebar button not found for: ${label}`)
-  }
-
-  fireEvent.click(button)
-}
+import { render, screen } from "@testing-library/react"
+import { Dashboard } from "@/components/pages/dashboard"
+import { EmployeeDirectory } from "@/components/pages/employee-directory"
+import { Documents } from "@/components/pages/documents"
+import { Profile } from "@/components/pages/profile"
+import {
+  loadContactsData,
+  loadDashboardData,
+  loadDocumentsData,
+  loadProfileData,
+} from "@/lib/portal-data/loaders"
 
 describe("Home smoke", () => {
-  it("renders dashboard by default", () => {
-    render(<Home />)
+  it("renders dashboard content", async () => {
+    const data = await loadDashboardData()
+    render(<Dashboard data={data} />)
 
     expect(screen.getByText("Добрый день, Иван!")).toBeInTheDocument()
     expect(screen.getByText("Последние новости")).toBeInTheDocument()
   })
 
-  it("switches to employee directory", () => {
-    render(<Home />)
-    clickSidebarItem("Сотрудники")
+  it("renders employee directory", async () => {
+    const data = await loadContactsData()
+    render(<EmployeeDirectory data={data} />)
 
     expect(screen.getByText("Справочник сотрудников")).toBeInTheDocument()
     expect(screen.getByText(/Всего в организации/i)).toBeInTheDocument()
   })
 
-  it("switches to documents and profile sections", () => {
-    render(<Home />)
-
-    clickSidebarItem("Документы")
+  it("renders documents and profile sections", async () => {
+    const documentsData = await loadDocumentsData()
+    render(<Documents data={documentsData} />)
     expect(screen.getByRole("heading", { name: "Документы" })).toBeInTheDocument()
 
-    clickSidebarItem("Мой профиль")
+    const profileData = await loadProfileData()
+    render(<Profile data={profileData} />)
     expect(screen.getByRole("heading", { name: "Иван Петров" })).toBeInTheDocument()
     expect(screen.getByText("Мои задачи")).toBeInTheDocument()
   })

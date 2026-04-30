@@ -1,95 +1,16 @@
+'use client'
+
 import { useState } from 'react'
-import { Search, Download, Eye, Filter, FileText, Lock } from 'lucide-react'
+import { Search, Download, Eye, FileText, Lock } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import type { DocumentsData } from '@/types/portal'
 
-const documents = [
-  {
-    id: 1,
-    title: 'Политика информационной безопасности',
-    category: 'Политики',
-    date: '15 апреля 2024',
-    version: '2.1',
-    size: '2.4 МБ',
-    owner: 'Служба безопасности',
-    access: 'all',
-  },
-  {
-    id: 2,
-    title: 'Политика обработки персональных данных',
-    category: 'Политики',
-    date: '10 апреля 2024',
-    version: '1.3',
-    size: '1.2 МБ',
-    owner: 'Юридический отдел',
-    access: 'all',
-  },
-  {
-    id: 3,
-    title: 'Инструкция по охране труда при работе на высоте',
-    category: 'Инструкции',
-    date: '8 апреля 2024',
-    version: '3.0',
-    size: '5.2 МБ',
-    owner: 'Отдел ОТ и ПБ',
-    access: 'all',
-  },
-  {
-    id: 4,
-    title: 'Регламент согласования проектной документации',
-    category: 'Регламенты',
-    date: '1 апреля 2024',
-    version: '1.5',
-    size: '3.1 МБ',
-    owner: 'СНАРК | Проект',
-    access: 'all',
-  },
-  {
-    id: 5,
-    title: 'Регламент работы с подрядными организациями',
-    category: 'Регламенты',
-    date: '25 марта 2024',
-    version: '2.0',
-    size: '4.8 МБ',
-    owner: 'СНАРК | Строй',
-    access: 'restricted',
-  },
-  {
-    id: 6,
-    title: 'Инструкция по эксплуатации тяговых подстанций',
-    category: 'Инструкции',
-    date: '20 марта 2024',
-    version: '1.2',
-    size: '8.5 МБ',
-    owner: 'СНАРК | Тяговые подстанции',
-    access: 'restricted',
-  },
-  {
-    id: 7,
-    title: 'Приказ о назначении ответственных лиц',
-    category: 'Приказы',
-    date: '15 марта 2024',
-    version: '1.0',
-    size: '0.5 МБ',
-    owner: 'Управление',
-    access: 'all',
-  },
-]
-
-const categories = [
-  'Все',
-  'Политики',
-  'Инструкции',
-  'Регламенты',
-  'Приказы',
-  'Архив',
-]
-
-export function Documents() {
+export function Documents({ data }: { data: DocumentsData }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('Все')
 
-  const filteredDocuments = documents.filter((doc) => {
+  const filteredDocuments = data.documents.filter((doc) => {
     const matchesSearch = doc.title
       .toLowerCase()
       .includes(searchTerm.toLowerCase())
@@ -124,7 +45,7 @@ export function Documents() {
           </div>
 
           <div className="flex gap-2 overflow-x-auto pb-2">
-            {categories.map((cat) => (
+            {data.categories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}

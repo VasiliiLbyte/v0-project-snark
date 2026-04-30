@@ -1,99 +1,31 @@
+import type { DashboardData } from "@/types/portal"
 import {
+  Bell,
+  BookOpen,
+  Cake,
+  Calendar,
+  CheckCircle,
+  ChevronRight,
+  Clock,
+  DoorOpen,
+  FileText,
+  HelpCircle,
+  Newspaper,
+  Users,
+} from "lucide-react"
+import { Card } from "@/components/ui/card"
+
+const iconMap = {
   Users,
   FileText,
   Calendar,
-  Bell,
-  CheckCircle,
   HelpCircle,
   BookOpen,
   Newspaper,
   DoorOpen,
-  Cake,
-  Clock,
-  MapPin,
-  ChevronRight,
-} from 'lucide-react'
-import { Card } from '@/components/ui/card'
+} as const
 
-const quickActions = [
-  { label: 'Создать заявку в ИТ', icon: HelpCircle, href: '/support/new' },
-  { label: 'Забронировать переговорную', icon: DoorOpen, href: '/rooms' },
-  { label: 'Новости компании', icon: Newspaper, href: '/culture/news' },
-  { label: 'Найти сотрудника', icon: Users, href: '/contacts' },
-  { label: 'Нормативная база', icon: FileText, href: '/documents' },
-  { label: 'Электронная библиотека', icon: BookOpen, href: '/library' },
-]
-
-const recentNews = [
-  {
-    id: 1,
-    title: 'Запущен новый проект по модернизации контактной сети в Казани',
-    date: '2 дня назад',
-    category: 'Проект',
-    isUrgent: false,
-  },
-  {
-    id: 2,
-    title: 'Плановое техническое обслуживание корпоративных систем 15-17 мая',
-    date: '5 дней назад',
-    category: 'Объявление',
-    isUrgent: true,
-  },
-  {
-    id: 3,
-    title: 'Результаты квартального совещания руководителей подразделений',
-    date: '1 неделю назад',
-    category: 'Отчёт',
-    isUrgent: false,
-  },
-  {
-    id: 4,
-    title: 'Приглашение на корпоративный праздник День энергетика',
-    date: '1 неделю назад',
-    category: 'Событие',
-    isUrgent: false,
-  },
-]
-
-const todayBirthdays = [
-  { name: 'Мария Иванова', department: 'СНАРК | Проект', avatar: 'МИ' },
-  { name: 'Алексей Козлов', department: 'СНАРК | Строй', avatar: 'АК' },
-]
-
-const myTasks = [
-  { title: 'Согласовать проектную документацию', deadline: 'Сегодня', priority: 'high' },
-  { title: 'Подготовить отчёт за апрель', deadline: 'Завтра', priority: 'medium' },
-  { title: 'Провести встречу с подрядчиком', deadline: '3 мая', priority: 'low' },
-]
-
-const serviceCards = [
-  {
-    title: 'Личный кабинет',
-    description: 'Ваш профиль, задачи, отпуск, оценки',
-    icon: Users,
-    color: 'bg-secondary',
-  },
-  {
-    title: 'Кадровые вопросы',
-    description: 'Всё о работе в СНАРК',
-    icon: FileText,
-    color: 'bg-accent',
-  },
-  {
-    title: 'Корп. культура',
-    description: 'Мероприятия, фото, жизнь компании',
-    icon: Calendar,
-    color: 'bg-success',
-  },
-  {
-    title: 'Нормативная база',
-    description: 'Политики, регламенты, инструкции',
-    icon: BookOpen,
-    color: 'bg-destructive',
-  },
-]
-
-export function Dashboard() {
+export function Dashboard({ data }: { data: DashboardData }) {
   const currentDate = new Date().toLocaleDateString('ru-RU', {
     weekday: 'long',
     year: 'numeric',
@@ -119,13 +51,13 @@ export function Dashboard() {
         
         <div className="relative z-10">
           <h1 className="text-2xl font-bold text-white md:text-3xl">
-            Добрый день, Иван!
+            Добрый день, {data.welcomeName}!
           </h1>
           <p className="mt-2 text-white/70">{currentDate}</p>
-          {todayBirthdays.length > 0 && (
+          {data.todayBirthdays.length > 0 && (
             <div className="mt-4 flex items-center gap-2 text-sm text-white/80">
               <Cake className="h-4 w-4" />
-              <span>Сегодня день рождения: {todayBirthdays.map(b => b.name).join(', ')}</span>
+              <span>Сегодня день рождения: {data.todayBirthdays.map((b) => b.name).join(", ")}</span>
             </div>
           )}
         </div>
@@ -133,8 +65,8 @@ export function Dashboard() {
 
       {/* Quick Actions */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-        {quickActions.map((action) => {
-          const Icon = action.icon
+        {data.quickActions.map((action) => {
+          const Icon = iconMap[action.icon as keyof typeof iconMap] ?? Users
           return (
             <button
               key={action.label}
@@ -164,7 +96,7 @@ export function Dashboard() {
             </div>
 
             <div className="divide-y divide-border">
-              {recentNews.map((news) => (
+              {data.recentNews.map((news) => (
                 <button
                   key={news.id}
                   className="flex w-full items-start gap-4 p-4 text-left transition-colors hover:bg-muted/50"
@@ -213,7 +145,7 @@ export function Dashboard() {
                 <span>Именинники</span>
               </div>
               <div className="space-y-2">
-                {todayBirthdays.map((person, i) => (
+                {data.todayBirthdays.map((person, i) => (
                   <div key={i} className="flex items-center gap-3">
                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-xs font-bold text-accent-foreground">
                       {person.avatar}
@@ -232,7 +164,7 @@ export function Dashboard() {
           <Card className="p-4">
             <h3 className="mb-4 font-bold text-card-foreground">Мои задачи</h3>
             <div className="space-y-3">
-              {myTasks.map((task, i) => (
+              {data.myTasks.map((task, i) => (
                 <div
                   key={i}
                   className="flex items-start gap-3 rounded-lg border border-border p-3"
@@ -257,8 +189,8 @@ export function Dashboard() {
 
       {/* Service Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {serviceCards.map((service) => {
-          const Icon = service.icon
+        {data.serviceCards.map((service) => {
+          const Icon = iconMap[service.icon as keyof typeof iconMap] ?? Users
           return (
             <button
               key={service.title}
