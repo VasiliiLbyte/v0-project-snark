@@ -76,12 +76,35 @@ function mapPresenceToLegacy(value: ProfilePresenceUpdatePayload["presence"]): "
   return "office"
 }
 
-async function getOrCreateDepartmentIdByName(rawName: string): Promise<string | null> {
+async function getOrCreateDepartmentIdByName(
+  rawName: string,
+  options?: { code?: string; contactEmail?: string }
+): Promise<string | null> {
   const name = rawName.trim()
   if (!name) return null
+  const code = options?.code?.trim() || undefined
+  const contactEmail = options?.contactEmail?.trim().toLowerCase() || undefined
   const [existing] = await db.select({ id: departments.id }).from(departments).where(eq(departments.name, name)).limit(1)
-  if (existing) return existing.id
-  const [created] = await db.insert(departments).values({ name }).returning({ id: departments.id })
+  if (existing) {
+    if (code || contactEmail) {
+      await db
+        .update(departments)
+        .set({
+          ...(code ? { code } : {}),
+          ...(contactEmail ? { contactEmail } : {}),
+        })
+        .where(eq(departments.id, existing.id))
+    }
+    return existing.id
+  }
+  const [created] = await db
+    .insert(departments)
+    .values({
+      name,
+      code: code ?? null,
+      contactEmail: contactEmail ?? null,
+    })
+    .returning({ id: departments.id })
   return created?.id ?? null
 }
 
@@ -111,7 +134,102 @@ function mapEmployee(
 }
 
 export const drizzlePortalRepository: PortalRepository = {
-  getDashboardData: mockPortalRepository.getDashboardData,
+  async getDashboardData(userId?: string) {
+    const today = new Date()
+    const todayMonth = today.getMonth() + 1
+    const todayDay = today.getDate()
+    const thirtyDaysAgo = new Date(today)
+    thirtyDaysAgo.setDate(today.getDate() - 30)
+
+    const birthdayRows = await db
+      .select({
+        id: users.id,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        email: users.email,
+        positionTitle: employeeProfiles.positionTitle,
+        avatarUrl: employeeProfiles.avatarUrl,
+        departmentName: departments.name,
+        birthDate: employeeProfiles.birthDate,
+      })
+      .from(users)
+      .leftJoin(employeeProfiles, eq(employeeProfiles.userId, users.id))
+      .leftJoin(departments, eq(departments.id, users.departmentId))
+      .where(
+        and(
+          eq(users.isActive, true),
+          sql`EXTRACT(MONTH FROM ${employeeProfiles.birthDate}::date) = ${todayMonth}`,
+          sql`EXTRACT(DAY FROM ${employeeProfiles.birthDate}::date) = ${todayDay}`
+        )
+      )
+
+    const newEmployeeRows = await db
+      .select({
+        id: users.id,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        positionTitle: employeeProfiles.positionTitle,
+        avatarUrl: employeeProfiles.avatarUrl,
+        departmentName: departments.name,
+        startDate: employeeProfiles.startDate,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .leftJoin(employeeProfiles, eq(employeeProfiles.userId, users.id))
+      .leftJoin(departments, eq(departments.id, users.departmentId))
+      .where(and(eq(users.isActive, true), sql`${users.createdAt} >= ${thirtyDaysAgo.toISOString()}`))
+      .orderBy(desc(users.createdAt))
+      .limit(5)
+
+    const recentNewsRows = await db
+      .select({
+        id: news.id,
+        title: news.title,
+        category: news.category,
+        isPinned: news.isPinned,
+        publishedAt: news.publishedAt,
+        createdAt: news.createdAt,
+      })
+      .from(news)
+      .where(eq(news.status, "published"))
+      .orderBy(desc(news.isPinned), desc(news.publishedAt), desc(news.createdAt))
+      .limit(5)
+
+    const fallback = await mockPortalRepository.getDashboardData()
+
+    return {
+      ...fallback,
+      todayBirthdays: birthdayRows.map((row) => ({
+        id: row.id,
+        name: `${row.firstName} ${row.lastName}`.trim(),
+        position: row.positionTitle ?? "Сотрудник",
+        department: row.departmentName ?? "Без отдела",
+        avatar: `${row.firstName.charAt(0)}${row.lastName.charAt(0)}`.toUpperCase(),
+        email: row.email,
+      })),
+      newEmployees: newEmployeeRows.map((row) => ({
+        id: row.id,
+        name: `${row.firstName} ${row.lastName}`.trim(),
+        position: row.positionTitle ?? "Сотрудник",
+        department: row.departmentName ?? "Без отдела",
+        avatar: `${row.firstName.charAt(0)}${row.lastName.charAt(0)}`.toUpperCase(),
+        startDate: row.startDate ?? row.createdAt.toISOString().slice(0, 10),
+      })),
+      recentNews: recentNewsRows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        body: "",
+        category: mapNewsCategory(row.category),
+        coverUrl: null,
+        isPinned: row.isPinned,
+        status: "published" as const,
+        authorId: null,
+        publishedAt: row.publishedAt ? row.publishedAt.toISOString() : null,
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.createdAt.toISOString(),
+      })),
+    }
+  },
   getSidebarItems: mockPortalRepository.getSidebarItems,
 
   async getContactsData(query?: EmployeesQuery) {
@@ -624,7 +742,10 @@ export const drizzlePortalRepository: PortalRepository = {
     const nameParts = parseFullName(payload.fullName)
     const now = new Date()
 
-    const departmentId = await getOrCreateDepartmentIdByName(payload.departmentName)
+    const departmentId = await getOrCreateDepartmentIdByName(payload.departmentName, {
+      code: payload.departmentCode,
+      contactEmail: payload.departmentEmail,
+    })
 
     await db
       .update(users)
@@ -701,7 +822,10 @@ export const drizzlePortalRepository: PortalRepository = {
         const departmentName = row.departmentName.trim()
         const now = new Date()
 
-        const departmentId = await getOrCreateDepartmentIdByName(departmentName)
+        const departmentId = await getOrCreateDepartmentIdByName(departmentName, {
+          code: row.departmentCode,
+          contactEmail: row.departmentEmail,
+        })
 
         const [existing] = await db
           .select({ id: users.id })

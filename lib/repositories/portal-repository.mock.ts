@@ -199,6 +199,24 @@ export const mockPortalRepository: PortalRepository = {
         { name: "Мария Иванова", department: "СНАРК | Проект", avatar: "МИ" },
         { name: "Алексей Козлов", department: "СНАРК | Строй", avatar: "АК" },
       ],
+      newEmployees: [
+        {
+          id: "employee-1",
+          name: "Николай Степанов",
+          position: "Инженер",
+          department: "СНАРК | Инжиниринг",
+          avatar: "НС",
+          startDate: "2026-04-21",
+        },
+        {
+          id: "employee-2",
+          name: "Ольга Егорова",
+          position: "Специалист по кадрам",
+          department: "Управление",
+          avatar: "ОЕ",
+          startDate: "2026-04-18",
+        },
+      ],
       myTasks: [
         { title: "Согласовать проектную документацию", deadline: "Сегодня", priority: "high" },
         { title: "Подготовить отчёт за апрель", deadline: "Завтра", priority: "medium" },

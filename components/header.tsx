@@ -1,10 +1,31 @@
-import { Bell, Search, User, Menu, ChevronDown } from 'lucide-react'
+"use client"
+
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { Bell, Search, User, Menu, ChevronDown, LogOut } from "lucide-react"
+import { useAuth } from "@/hooks/use-auth"
 
 interface HeaderProps {
   onMenuClick?: () => void
 }
 
 export function Header({ onMenuClick }: HeaderProps) {
+  const router = useRouter()
+  const { logout } = useAuth()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return
+    setIsLoggingOut(true)
+    try {
+      await logout()
+    } finally {
+      router.replace("/login")
+      router.refresh()
+      setIsLoggingOut(false)
+    }
+  }
+
   return (
     <header className="sticky top-0 z-50 h-16 bg-primary">
       <div className="flex h-full items-center justify-between px-4 md:px-6">
@@ -32,7 +53,7 @@ export function Header({ onMenuClick }: HeaderProps) {
         
         {/* Center: Desktop Navigation */}
         <nav className="hidden items-center gap-1 lg:flex">
-          {['О компании', 'Сотрудники', 'Документы', 'Сервисы', 'Корп. культура'].map((item) => (
+          {["О компании", "Сотрудники", "Документы", "Сервисы", "Корп. культура"].map((item) => (
             <button
               key={item}
               className="flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white"
@@ -74,6 +95,17 @@ export function Header({ onMenuClick }: HeaderProps) {
               <p className="text-xs text-white/70">Руководитель проекта</p>
             </div>
             <ChevronDown className="hidden h-4 w-4 opacity-70 md:block" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void handleLogout()}
+            disabled={isLoggingOut}
+            aria-label="Выйти из аккаунта"
+            className="flex items-center gap-2 rounded-lg p-2 text-white/90 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <LogOut className="h-5 w-5" />
+            <span className="hidden text-sm font-medium md:inline">{isLoggingOut ? "Выход..." : "Выйти"}</span>
           </button>
         </div>
       </div>

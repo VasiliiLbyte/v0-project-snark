@@ -248,6 +248,8 @@ export const adminEmployeeUpsertSchema = z.object({
   fullName: z.string().trim().min(1).max(150),
   positionTitle: z.string().trim().min(1).max(150),
   departmentName: z.string().trim().min(1).max(150),
+  departmentCode: z.string().trim().max(50).optional(),
+  departmentEmail: z.string().trim().email().optional(),
   phone: z.string().trim().max(40).optional(),
   email: z.string().trim().email(),
   birthDate: z.string().date().optional(),

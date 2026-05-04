@@ -21,9 +21,21 @@ export interface NewsItem {
 }
 
 export interface BirthdayPerson {
+  id?: string
   name: string
+  position?: string
   department: string
   avatar: string
+  email?: string
+}
+
+export interface NewEmployeeItem {
+  id: string
+  name: string
+  position: string
+  department: string
+  avatar: string
+  startDate: string
 }
 
 export interface TaskItem {
@@ -44,6 +56,7 @@ export interface DashboardData {
   quickActions: QuickAction[]
   recentNews: NewsItem[]
   todayBirthdays: BirthdayPerson[]
+  newEmployees: NewEmployeeItem[]
   myTasks: TaskItem[]
   serviceCards: ServiceCardItem[]
 }
@@ -63,6 +76,8 @@ export interface Employee {
 export interface Department {
   id: string
   name: string
+  code?: string | null
+  contactEmail?: string | null
   description?: string | null
   headUserId?: string | null
   parentId?: string | null
@@ -289,6 +304,8 @@ export interface AdminEmployeeUpsertPayload {
   fullName: string
   positionTitle: string
   departmentName: string
+  departmentCode?: string
+  departmentEmail?: string
   phone?: string
   email: string
   birthDate?: string

@@ -15,6 +15,8 @@ export const userRoleEnum = pgEnum("user_role", ["admin", "hr_manager", "employe
 export const departments = pgTable("departments", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
+  code: text("code"),
+  contactEmail: text("contact_email"),
   description: text("description"),
   headUserId: uuid("head_user_id").references((): AnyPgColumn => users.id, { onDelete: "set null" }),
   parentId: uuid("parent_id").references((): AnyPgColumn => departments.id, { onDelete: "set null" }),

@@ -162,6 +162,28 @@ export function Dashboard({ data }: { data: DashboardData }) {
             </div>
           </Card>
 
+          {/* New Employees */}
+          <Card className="p-4">
+            <h3 className="mb-4 font-bold text-card-foreground">Новые сотрудники</h3>
+            <div className="space-y-2">
+              {data.newEmployees.length > 0 ? (
+                data.newEmployees.map((person) => (
+                  <div key={person.id} className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-xs font-bold text-accent-foreground">
+                      {person.avatar}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-card-foreground">{person.name}</p>
+                      <p className="text-xs text-muted-foreground">{person.department}</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">За последние 30 дней новых сотрудников нет</p>
+              )}
+            </div>
+          </Card>
+
           {/* My Tasks */}
           <Card className="p-4">
             <h3 className="mb-4 font-bold text-card-foreground">Мои задачи</h3>

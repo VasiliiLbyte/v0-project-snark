@@ -32,7 +32,16 @@ CREATE TABLE "vacations" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "users" ALTER COLUMN "department_id" SET DATA TYPE uuid;--> statement-breakpoint
+ALTER TABLE "users"
+ALTER COLUMN "department_id" TYPE uuid
+USING (
+  CASE
+    WHEN "department_id" IS NULL THEN NULL
+    WHEN "department_id" ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+      THEN "department_id"::uuid
+    ELSE NULL
+  END
+);--> statement-breakpoint
 ALTER TABLE "documents" ADD COLUMN "doc_type" text DEFAULT 'general' NOT NULL;--> statement-breakpoint
 ALTER TABLE "documents" ADD COLUMN "linked_position" text;--> statement-breakpoint
 ALTER TABLE "documents" ADD COLUMN "linked_department_id" uuid;--> statement-breakpoint
