@@ -1,5 +1,5 @@
 import "server-only"
-import { and, count, desc, eq, ilike, or, sql } from "drizzle-orm"
+import { and, count, desc, eq, ilike, isNotNull, or, sql } from "drizzle-orm"
 import { db } from "@/lib/db/client"
 import { departments, documents, employeeProfiles, news, users, vacations } from "@/lib/db/schema"
 import { hashPassword } from "@/lib/auth/password"
@@ -237,51 +237,85 @@ export const drizzlePortalRepository: PortalRepository = {
     const limit = query?.limit ?? 20
     const offset = (page - 1) * limit
 
+    // Фильтр: поиск по имени/email, фильтр по НАЗВАНИЮ отдела (не UUID)
     const where = and(
       query?.department && query.department !== "Все"
-        ? eq(users.departmentId, query.department)
+        ? eq(departments.name, query.department)
         : undefined,
       query?.search
         ? or(
             ilike(users.firstName, `%${query.search}%`),
             ilike(users.lastName, `%${query.search}%`),
-            ilike(users.email, `%${query.search}%`)
+            ilike(users.email, `%${query.search}%`),
+            ilike(employeeProfiles.positionTitle, `%${query.search}%`)
           )
-        : undefined
+        : undefined,
+      eq(users.isActive, true)
     )
 
-    const [totalRow] = await db.select({ value: count() }).from(users).where(where)
+    // Считать total с JOIN
+    const [totalRow] = await db
+      .select({ value: count() })
+      .from(users)
+      .leftJoin(employeeProfiles, eq(employeeProfiles.userId, users.id))
+      .leftJoin(departments, eq(departments.id, users.departmentId))
+      .where(where)
 
+    // Основной SELECT с JOIN
     const rows = await db
       .select({
         id: users.id,
         firstName: users.firstName,
         lastName: users.lastName,
         email: users.email,
-        role: users.role,
-        departmentId: users.departmentId,
         isActive: users.isActive,
+        phone: employeeProfiles.phone,
+        positionTitle: employeeProfiles.positionTitle,
+        avatarUrl: employeeProfiles.avatarUrl,
+        presence: employeeProfiles.presence,
+        departmentName: departments.name,
       })
       .from(users)
+      .leftJoin(employeeProfiles, eq(employeeProfiles.userId, users.id))
+      .leftJoin(departments, eq(departments.id, users.departmentId))
       .where(where)
       .orderBy(sql`${users.lastName} asc, ${users.firstName} asc`)
       .limit(limit)
       .offset(offset)
 
-    const departmentsRows = await db.selectDistinct({ departmentId: users.departmentId }).from(users)
+    // Список отделов для фильтра — по НАЗВАНИЮ, не UUID
+    const deptList = await db
+      .selectDistinct({ name: departments.name })
+      .from(departments)
+      .where(isNotNull(departments.name))
 
-    const departments = [
+    const departmentNames = [
       "Все",
-      ...departmentsRows
-        .map((row) => row.departmentId)
-        .filter((value): value is string => typeof value === "string" && value.length > 0),
+      ...deptList.map((d) => d.name).filter((n): n is string => !!n),
     ]
 
-    const employees = rows.map((row, idx) => mapEmployee(row, offset + idx + 1))
+    // Маппинг строк в Employee
+    const employees: Employee[] = rows.map((row, idx) => ({
+      id: offset + idx + 1,
+      name: `${row.firstName} ${row.lastName}`.trim(),
+      position: row.positionTitle ?? "Сотрудник",
+      department: row.departmentName ?? "Без отдела",
+      phone: row.phone ?? "Не указан",
+      email: row.email,
+      office: "Не указан",
+      status:
+        mapPresenceFromLegacy(row.presence) === "office"
+          ? "online"
+          : mapPresenceFromLegacy(row.presence) === "vacation"
+            ? "away"
+            : "offline",
+      avatar: initials(row.firstName, row.lastName),
+      avatarUrl: row.avatarUrl ?? undefined,
+    }))
 
     return mapContactsData({
       employees,
-      departments,
+      departments: departmentNames,
       total: Number(totalRow?.value ?? 0),
       page,
       limit,

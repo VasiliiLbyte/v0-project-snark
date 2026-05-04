@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Sheet,
   SheetContent,
@@ -303,17 +304,23 @@ export default function AdminEmployeesPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="status">Статус</Label>
-              <Input
-                id="status"
+              <Label>Статус</Label>
+              <Select
                 value={form.status ?? "active"}
-                onChange={(event) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    status: event.target.value as AdminEmployeeUpsertPayload["status"],
-                  }))
+                onValueChange={(value) =>
+                  setForm((prev) => ({ ...prev, status: value as AdminEmployeeUpsertPayload["status"] }))
                 }
-              />
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Выберите статус" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">В офисе</SelectItem>
+                  <SelectItem value="remote">На удалёнке</SelectItem>
+                  <SelectItem value="vacation">В отпуске</SelectItem>
+                  <SelectItem value="dismissed">Скрыт / Уволен</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="welcomeNote">Приветствие</Label>
