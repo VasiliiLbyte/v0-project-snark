@@ -24,7 +24,7 @@ export default function AdminNewsPage() {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch("/api/news?category=all&page=1&limit=100")
+      const response = await fetch("/api/admin/news?category=all&page=1&limit=100")
       const body = (await response.json()) as NewsListResponse & { error?: string }
       if (!response.ok) {
         setError(body.error ?? "Не удалось загрузить новости")
@@ -44,7 +44,7 @@ export default function AdminNewsPage() {
 
   const remove = async (id: string) => {
     setError(null)
-    const response = await fetch(`/api/news/${id}`, { method: "DELETE" })
+    const response = await fetch(`/api/admin/news/${id}`, { method: "DELETE" })
     const body = (await response.json()) as { error?: string }
     if (!response.ok) {
       setError(body.error ?? "Не удалось удалить новость")
@@ -55,7 +55,7 @@ export default function AdminNewsPage() {
 
   const togglePin = async (item: NewsListItem) => {
     setError(null)
-    const response = await fetch(`/api/news/${item.id}`, {
+    const response = await fetch(`/api/admin/news/${item.id}`, {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({

@@ -17,7 +17,11 @@ describe("Home smoke", () => {
     const data = await mockPortalRepository.getDashboardData()
     render(<Dashboard data={data} />)
 
-    expect(screen.getByText("Добрый день, Иван!")).toBeInTheDocument()
+    expect(
+      screen.getByRole("heading", {
+        name: /^(Доброй ночи|Доброе утро|Добрый день|Добрый вечер), Иван!$/,
+      })
+    ).toBeInTheDocument()
     expect(screen.getByText("Последние новости")).toBeInTheDocument()
   })
 

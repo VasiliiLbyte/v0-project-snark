@@ -1,4 +1,5 @@
 import { z } from "zod"
+import type { DepartmentTreeNode } from "@/types/portal"
 
 export const employeesQuerySchema = z.object({
   search: z.string().trim().optional(),
@@ -9,6 +10,7 @@ export const employeesQuerySchema = z.object({
 
 export const employeeSchema = z.object({
   id: z.number().int(),
+  userId: z.string().uuid(),
   name: z.string(),
   position: z.string(),
   department: z.string(),
@@ -17,6 +19,29 @@ export const employeeSchema = z.object({
   office: z.string(),
   status: z.enum(["online", "away", "offline"]),
   avatar: z.string(),
+  avatarUrl: z.string().optional(),
+  inn: z.string().nullable().optional(),
+  snils: z.string().nullable().optional(),
+  birthDate: z.string().nullable().optional(),
+  address: z.string().nullable().optional(),
+  citizenship: z.string().nullable().optional(),
+  anniversaryYears: z.number().int().nullable().optional(),
+  professions: z.string().nullable().optional(),
+  education: z.string().nullable().optional(),
+  managerPosition: z.string().nullable().optional(),
+  contractEndDate: z.string().nullable().optional(),
+  isContractor: z.boolean(),
+  hireDate: z.string().nullable().optional(),
+  welcomeText: z.string().nullable().optional(),
+  isNew: z.boolean(),
+  manager: z
+    .object({
+      id: z.string().uuid(),
+      fullName: z.string(),
+      positionTitle: z.string().nullable(),
+    })
+    .nullable()
+    .optional(),
 })
 
 export const employeesResponseSchema = z.object({
@@ -27,10 +52,126 @@ export const employeesResponseSchema = z.object({
   limit: z.number().int().min(1),
 })
 
+export const employeeDetailResponseSchema = z.object({
+  item: employeeSchema.nullable(),
+})
+
 export const apiErrorSchema = z.object({
   error: z.string(),
   code: z.string().optional(),
   details: z.string().optional(),
+})
+
+export const birthdayPersonSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  department: z.string(),
+  position: z.string(),
+  avatar: z.string(),
+  avatarUrl: z.string().nullable().optional(),
+  birthDate: z.string(),
+  age: z.number().int().min(0).max(150),
+})
+
+export const birthdaysResponseSchema = z.object({
+  today: z.array(birthdayPersonSchema),
+  thisWeek: z.array(birthdayPersonSchema),
+  upcoming: z.array(birthdayPersonSchema),
+})
+
+export const departmentTreeHeadSchema = z.object({
+  id: z.string().uuid(),
+  fullName: z.string(),
+  positionTitle: z.string().nullable(),
+  avatarUrl: z.string().nullable(),
+})
+
+export const departmentTreeNodeSchema: z.ZodType<DepartmentTreeNode> = z.lazy(() =>
+  z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    code: z.string().nullable(),
+    description: z.string().nullable(),
+    head: departmentTreeHeadSchema.nullable(),
+    employeeCount: z.number().int().nonnegative(),
+    children: z.array(departmentTreeNodeSchema),
+  })
+)
+
+export const departmentsTreeResponseSchema = z.object({
+  departments: z.array(departmentTreeNodeSchema),
+})
+
+export const adminDepartmentUpsertSchema = z.object({
+  name: z.string().trim().min(1, "Укажите название").max(255),
+  code: z
+    .string()
+    .trim()
+    .max(50)
+    .nullable()
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : null)),
+  description: z
+    .string()
+    .trim()
+    .max(2000)
+    .nullable()
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : null)),
+  parentId: z
+    .string()
+    .uuid()
+    .nullable()
+    .optional()
+    .transform((v) => v ?? null),
+  headUserId: z
+    .string()
+    .uuid()
+    .nullable()
+    .optional()
+    .transform((v) => v ?? null),
+  contactEmail: z
+    .union([
+      z.literal("").transform(() => null),
+      z.string().trim().email("Некорректный email").max(255),
+      z.null(),
+    ])
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : null)),
+})
+
+export const adminDepartmentItemSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  code: z.string().nullable(),
+  description: z.string().nullable(),
+  parentId: z.string().uuid().nullable(),
+  parentName: z.string().nullable(),
+  headUserId: z.string().uuid().nullable(),
+  headName: z.string().nullable(),
+  contactEmail: z.string().nullable(),
+  employeeCount: z.number().int().nonnegative(),
+})
+
+export const adminDepartmentsResponseSchema = z.object({
+  items: z.array(adminDepartmentItemSchema),
+})
+
+export type AdminDepartmentUpsertInput = z.infer<typeof adminDepartmentUpsertSchema>
+
+export const newEmployeeItemSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  position: z.string(),
+  department: z.string(),
+  avatar: z.string(),
+  avatarUrl: z.string().nullable().optional(),
+  startDate: z.string(),
+  welcomeText: z.string().nullable().optional(),
+})
+
+export const newEmployeesResponseSchema = z.object({
+  items: z.array(newEmployeeItemSchema),
 })
 
 export const documentsQuerySchema = z.object({
@@ -163,7 +304,10 @@ export const profileDataSchema = z.object({
           endDate: z.string(),
           daysTotal: z.number().int(),
           daysRemaining: z.number().int(),
-          status: z.enum(["approved", "pending"]),
+          status: z.enum(["approved", "pending", "rejected"]),
+          type: z.enum(["annual", "sick", "unpaid", "maternity"]),
+          comment: z.string().nullable(),
+          approvedBy: z.string().nullable(),
           createdAt: z.string(),
         })
       ),
@@ -189,7 +333,10 @@ export const profileDataSchema = z.object({
       endDate: z.string(),
       daysTotal: z.number().int(),
       daysRemaining: z.number().int(),
-      status: z.enum(["approved", "pending"]),
+      status: z.enum(["approved", "pending", "rejected"]),
+      type: z.enum(["annual", "sick", "unpaid", "maternity"]),
+      comment: z.string().nullable(),
+      approvedBy: z.string().nullable(),
       createdAt: z.string(),
     })
   ),
@@ -238,24 +385,52 @@ export const adminEmployeeItemSchema = z.object({
   isActive: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  inn: z.string().nullable().optional(),
+  snils: z.string().nullable().optional(),
+  address: z.string().nullable().optional(),
+  citizenship: z.string().nullable().optional(),
+  anniversaryYears: z.number().int().nullable().optional(),
+  professions: z.string().nullable().optional(),
+  education: z.string().nullable().optional(),
+  managerPosition: z.string().nullable().optional(),
+  contractEndDate: z.string().nullable().optional(),
+  isContractor: z.boolean(),
+  isNew: z.boolean(),
 })
 
 export const adminEmployeesResponseSchema = z.object({
   items: z.array(adminEmployeeItemSchema),
 })
 
+const innRegex = /^\d{10,12}$/
+const snilsRegex = /^(\d{3}-\d{3}-\d{3} \d{2}|\d{11})$/
+
 export const adminEmployeeUpsertSchema = z.object({
   fullName: z.string().trim().min(1).max(150),
-  positionTitle: z.string().trim().min(1).max(150),
-  departmentName: z.string().trim().min(1).max(150),
+  positionTitle: z.string().trim().min(1).max(200),
+  departmentName: z.string().trim().max(200).optional().default(""),
   departmentCode: z.string().trim().max(50).optional(),
   departmentEmail: z.string().trim().email().optional(),
   phone: z.string().trim().max(40).optional(),
-  email: z.string().trim().email(),
+  email: z.string().trim().email().optional(),
   birthDate: z.string().date().optional(),
   startDate: z.string().date().optional(),
   welcomeNote: z.string().trim().max(2000).optional(),
   status: adminEmployeeStatusSchema.optional(),
+  inn: z.string().trim().regex(innRegex, "ИНН должен содержать 10–12 цифр").optional(),
+  snils: z
+    .string()
+    .trim()
+    .regex(snilsRegex, "СНИЛС должен быть в формате XXX-XXX-XXX XX или 11 цифр")
+    .optional(),
+  address: z.string().trim().max(500).optional(),
+  citizenship: z.string().trim().max(100).optional(),
+  anniversaryYears: z.number().int().min(0).max(150).optional(),
+  professions: z.string().trim().max(500).optional(),
+  education: z.string().trim().max(200).optional(),
+  managerPosition: z.string().trim().max(200).optional(),
+  contractEndDate: z.string().date().optional(),
+  isContractor: z.boolean().optional(),
 })
 
 export const adminEmployeeHideSchema = z.object({
@@ -279,14 +454,17 @@ export const newsStatusSchema = z.enum(["draft", "published"])
 export const newsListQuerySchema = z.object({
   category: z.enum(["all", "company", "projects", "people", "important"]).default("all"),
   page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(50).default(10),
+  limit: z.coerce.number().int().min(1).max(100).default(10),
 })
 
 export const newsEditorSchema = z.object({
   title: z.string().trim().min(1).max(255),
   body: z.string().trim().min(1),
   category: newsCategorySchema,
-  coverUrl: z.string().trim().url().optional(),
+  coverUrl: z
+    .union([z.string().trim().url(), z.literal("")])
+    .optional()
+    .transform((value) => (value ? value : undefined)),
   isPinned: z.boolean().default(false),
   status: newsStatusSchema.default("draft"),
   publishedAt: z.string().datetime().optional(),
@@ -330,6 +508,190 @@ export const newsCoverUploadResponseSchema = z.object({
   expiresAt: z.string(),
 })
 
+export const ticketCategoryEnum = z.enum(["it", "aho", "hr", "other"])
+export const ticketStatusEnum = z.enum(["new", "in_progress", "resolved", "closed"])
+export const ticketPriorityEnum = z.enum(["low", "medium", "high", "critical"])
+
+export const ticketsListQuerySchema = z.object({
+  status: z.union([ticketStatusEnum, z.literal("all")]).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+})
+
+export const ticketCreateSchema = z.object({
+  category: ticketCategoryEnum,
+  subject: z.string().trim().min(1, "Укажите тему").max(200),
+  description: z.string().trim().max(5000).optional(),
+  priority: ticketPriorityEnum.default("medium"),
+})
+
+export const ticketAdminUpdateSchema = z
+  .object({
+    status: ticketStatusEnum.optional(),
+    assigneeId: z.string().uuid().nullable().optional(),
+  })
+  .refine((value) => value.status !== undefined || value.assigneeId !== undefined, {
+    message: "Нужно указать хотя бы одно поле",
+  })
+
+export const ticketSchema = z.object({
+  id: z.string().uuid(),
+  authorId: z.string().uuid(),
+  authorName: z.string(),
+  category: ticketCategoryEnum,
+  subject: z.string(),
+  description: z.string().nullable(),
+  status: ticketStatusEnum,
+  priority: ticketPriorityEnum,
+  assigneeId: z.string().uuid().nullable(),
+  assigneeName: z.string().nullable(),
+  resolvedAt: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+export const ticketsListResponseSchema = z.object({
+  items: z.array(ticketSchema),
+  total: z.number().int().min(0),
+  page: z.number().int().min(1),
+  limit: z.number().int().min(1),
+})
+
+export const ticketDetailResponseSchema = z.object({
+  item: ticketSchema.nullable(),
+})
+
+export const eventCategoryEnum = z.enum([
+  "meeting",
+  "birthday",
+  "corporate",
+  "deadline",
+  "holiday",
+])
+
+export const eventsMonthQuerySchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/, "Укажите месяц в формате YYYY-MM"),
+  category: z.union([eventCategoryEnum, z.literal("all")]).optional(),
+})
+
+export const eventCreateSchema = z.object({
+  title: z.string().trim().min(1, "Укажите название").max(200),
+  description: z
+    .string()
+    .trim()
+    .max(5000)
+    .optional()
+    .nullable()
+    .transform((value) => (value && value.length > 0 ? value : null)),
+  startAt: z.string().datetime({ message: "Некорректная дата начала" }),
+  endAt: z
+    .string()
+    .datetime({ message: "Некорректная дата окончания" })
+    .nullable()
+    .optional(),
+  location: z
+    .string()
+    .trim()
+    .max(200)
+    .nullable()
+    .optional()
+    .transform((value) => (value && value.length > 0 ? value : null)),
+  category: eventCategoryEnum,
+  isAllDay: z.boolean().optional().default(false),
+})
+
+export const calendarEventSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string().nullable(),
+  startAt: z.string(),
+  endAt: z.string().nullable(),
+  location: z.string().nullable(),
+  category: eventCategoryEnum,
+  isAllDay: z.boolean(),
+  createdBy: z.string().uuid().nullable(),
+  createdAt: z.string(),
+  isVirtual: z.boolean(),
+})
+
+export const eventsListResponseSchema = z.object({
+  items: z.array(calendarEventSchema),
+  month: z.string(),
+})
+
+export const eventDetailResponseSchema = z.object({
+  item: calendarEventSchema.nullable(),
+})
+
+export const vacationTypeEnum = z.enum(["annual", "sick", "unpaid", "maternity"])
+export const vacationStatusEnum = z.enum(["pending", "approved", "rejected"])
+
+export const vacationCreateSchema = z
+  .object({
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Дата в формате YYYY-MM-DD"),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Дата в формате YYYY-MM-DD"),
+    type: vacationTypeEnum,
+    comment: z
+      .string()
+      .trim()
+      .max(1000)
+      .optional()
+      .nullable()
+      .transform((value) => (value && value.length > 0 ? value : null)),
+  })
+  .refine((value) => value.startDate <= value.endDate, {
+    message: "Дата окончания должна быть позже или равна дате начала",
+    path: ["endDate"],
+  })
+
+export const vacationAdminUpdateSchema = z.object({
+  status: z.enum(["approved", "rejected"]),
+  comment: z
+    .string()
+    .trim()
+    .max(1000)
+    .optional()
+    .nullable()
+    .transform((value) => (value && value.length > 0 ? value : null)),
+})
+
+export const vacationItemSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+  startDate: z.string(),
+  endDate: z.string(),
+  daysTotal: z.number().int(),
+  daysRemaining: z.number().int(),
+  status: vacationStatusEnum,
+  type: vacationTypeEnum,
+  comment: z.string().nullable(),
+  approvedBy: z.string().uuid().nullable(),
+  createdAt: z.string(),
+})
+
+export const vacationBalanceSchema = z.object({
+  annual: z.number().int().min(0),
+  used: z.number().int().min(0),
+  remaining: z.number().int(),
+})
+
+export const vacationsListResponseSchema = z.object({
+  items: z.array(vacationItemSchema),
+})
+
+export const adminVacationsListQuerySchema = z.object({
+  status: vacationStatusEnum.optional(),
+})
+
+export const adminVacationItemSchema = vacationItemSchema.extend({
+  authorName: z.string(),
+  authorDepartment: z.string().nullable(),
+})
+
+export const adminVacationsListResponseSchema = z.object({
+  items: z.array(adminVacationItemSchema),
+})
+
 export type EmployeesQueryInput = z.infer<typeof employeesQuerySchema>
 export type EmployeesResponseOutput = z.infer<typeof employeesResponseSchema>
 export type DocumentsQueryInput = z.infer<typeof documentsQuerySchema>
@@ -337,3 +699,62 @@ export type DocumentsResponseOutput = z.infer<typeof documentsResponseSchema>
 export type AdminEmployeeUpsertInput = z.infer<typeof adminEmployeeUpsertSchema>
 export type NewsListQueryInput = z.infer<typeof newsListQuerySchema>
 export type NewsEditorInput = z.infer<typeof newsEditorSchema>
+export type TicketsListQueryInput = z.infer<typeof ticketsListQuerySchema>
+export type TicketCreateInput = z.infer<typeof ticketCreateSchema>
+export type TicketAdminUpdateInput = z.infer<typeof ticketAdminUpdateSchema>
+export type EventsMonthQueryInput = z.infer<typeof eventsMonthQuerySchema>
+export type EventCreateInput = z.infer<typeof eventCreateSchema>
+export type VacationCreateInput = z.infer<typeof vacationCreateSchema>
+export type VacationAdminUpdateInput = z.infer<typeof vacationAdminUpdateSchema>
+export type AdminVacationsListQueryInput = z.infer<typeof adminVacationsListQuerySchema>
+
+export const knowledgeCategoryEnum = z.enum(["onboarding", "it", "hr", "safety", "general"])
+
+export const knowledgeListQuerySchema = z.object({
+  category: z.union([z.literal("all"), knowledgeCategoryEnum]).default("all"),
+  search: z.string().trim().max(200).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+})
+
+export const knowledgeEditorSchema = z.object({
+  title: z.string().trim().min(1, "Укажите заголовок").max(255),
+  content: z.string().trim().min(1, "Текст статьи не может быть пустым"),
+  category: knowledgeCategoryEnum,
+  tags: z
+    .string()
+    .trim()
+    .max(500)
+    .optional()
+    .nullable()
+    .transform((value) => (value && value.length > 0 ? value : null)),
+  isPublished: z.boolean().default(false),
+})
+
+export const knowledgeArticleSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  content: z.string(),
+  category: knowledgeCategoryEnum,
+  tags: z.array(z.string()),
+  authorId: z.string().uuid().nullable(),
+  authorName: z.string(),
+  isPublished: z.boolean(),
+  viewsCount: z.number().int().min(0),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+export const knowledgeListResponseSchema = z.object({
+  items: z.array(knowledgeArticleSchema),
+  total: z.number().int().min(0),
+  page: z.number().int().min(1),
+  limit: z.number().int().min(1),
+})
+
+export const knowledgeDetailResponseSchema = z.object({
+  item: knowledgeArticleSchema.nullable(),
+})
+
+export type KnowledgeListQueryInput = z.infer<typeof knowledgeListQuerySchema>
+export type KnowledgeEditorInput = z.infer<typeof knowledgeEditorSchema>

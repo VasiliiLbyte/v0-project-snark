@@ -11,7 +11,6 @@ import {
   BookOpen,
   Newspaper,
   ShieldCheck,
-  LogOut,
   ChevronRight,
   X,
 } from 'lucide-react'
@@ -29,10 +28,10 @@ interface SidebarProps {
 }
 
 const secondaryItems = [
-  { id: 'about', label: 'О компании', icon: Building2 },
-  { id: 'calendar', label: 'Календарь', icon: Calendar },
-  { id: 'library', label: 'Библиотека', icon: BookOpen },
-  { id: 'support', label: 'Поддержка', icon: HelpCircle },
+  { id: 'about', label: 'О компании', icon: Building2, href: '/about' },
+  { id: 'calendar', label: 'Календарь', icon: Calendar, href: '/calendar' },
+  { id: 'library', label: 'Библиотека', icon: BookOpen, href: '/knowledge' },
+  { id: 'support', label: 'Поддержка', icon: HelpCircle, href: '/support' },
 ]
 
 const iconMap = {
@@ -127,30 +126,27 @@ export function Sidebar({
           </div>
           {secondaryItems.map((item) => {
             const Icon = item.icon
+            const hrefPath = item.href.split("?")[0] ?? item.href
+            const isActive =
+              pathname === hrefPath || pathname.startsWith(`${hrefPath}/`)
             return (
-              <button
+              <Link
                 key={item.id}
-                type="button"
+                href={item.href}
                 onClick={onClose}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-sidebar-foreground/70 transition-colors hover:bg-sidebar-primary hover:text-sidebar-foreground"
+                className={cn(
+                  'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors',
+                  isActive
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                    : 'text-sidebar-foreground/70 hover:bg-sidebar-primary hover:text-sidebar-foreground'
+                )}
               >
                 <Icon className="h-4 w-4 shrink-0" />
                 <span>{item.label}</span>
-              </button>
+              </Link>
             )
           })}
         </nav>
-
-        {/* Footer */}
-        <div className="border-t border-sidebar-border p-3">
-          <button 
-            type="button"
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-sidebar-foreground/70 transition-colors hover:bg-destructive/20 hover:text-destructive"
-          >
-            <LogOut className="h-4 w-4" />
-            <span>Выход</span>
-          </button>
-        </div>
       </aside>
     </>
   )

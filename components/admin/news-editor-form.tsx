@@ -46,7 +46,7 @@ export function NewsEditorForm({ newsId }: NewsEditorFormProps) {
       setLoading(true)
       setError(null)
       try {
-        const response = await fetch(`/api/news/${newsId}`)
+        const response = await fetch(`/api/admin/news/${newsId}`)
         const body = (await response.json()) as { item?: NewsListItem | null; error?: string }
         if (!response.ok || !body.item) {
           setError(body.error ?? "Не удалось загрузить новость")
@@ -109,11 +109,13 @@ export function NewsEditorForm({ newsId }: NewsEditorFormProps) {
     setSaving(true)
     setError(null)
     try {
+      const trimmedCover = form.coverUrl?.trim()
       const payload: NewsEditorPayload = {
         ...form,
+        coverUrl: trimmedCover ? trimmedCover : undefined,
         status,
       }
-      const url = newsId ? `/api/news/${newsId}` : "/api/news"
+      const url = newsId ? `/api/admin/news/${newsId}` : "/api/admin/news"
       const method = newsId ? "PUT" : "POST"
       const response = await fetch(url, {
         method,

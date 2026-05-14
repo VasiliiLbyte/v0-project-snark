@@ -40,6 +40,13 @@ function getCurrentMonthDate(base: Date, day: number): string {
   return toIsoDate(date)
 }
 
+function birthdayInPast(base: Date, daysOffset: number, yearsAgo: number): string {
+  const date = new Date(base)
+  date.setDate(base.getDate() + daysOffset)
+  date.setFullYear(base.getFullYear() - yearsAgo)
+  return toIsoDate(date)
+}
+
 async function main() {
   const connectionString = process.env.DATABASE_URL
   if (!connectionString) {
@@ -52,8 +59,6 @@ async function main() {
   let createdEmployees = 0
 
   const today = new Date()
-  const birthdayToday = toIsoDate(today)
-  const nextWeekBirthdays = [addDays(today, 1), addDays(today, 2), addDays(today, 4), addDays(today, 6)]
 
   const deptSeeds = [
     { name: "IT-отдел", code: "IT", contactEmail: "it@snark.ru" },
@@ -98,7 +103,7 @@ async function main() {
         departmentName: "IT-отдел",
         positionTitle: "Системный администратор",
         phone: "+7 (900) 100-00-01",
-        birthDate: birthdayToday,
+        birthDate: birthdayInPast(today, 0, 36),
         startDate: getCurrentMonthDate(today, 2),
       },
       {
@@ -107,7 +112,7 @@ async function main() {
         departmentName: "IT-отдел",
         positionTitle: "Frontend разработчик",
         phone: "+7 (900) 100-00-02",
-        birthDate: birthdayToday,
+        birthDate: birthdayInPast(today, 0, 31),
         startDate: getCurrentMonthDate(today, 5),
       },
       {
@@ -116,7 +121,7 @@ async function main() {
         departmentName: "IT-отдел",
         positionTitle: "Backend разработчик",
         phone: "+7 (900) 100-00-03",
-        birthDate: birthdayToday,
+        birthDate: birthdayInPast(today, 0, 40),
       },
       {
         fullName: "Козлова Елена Дмитриевна",
@@ -124,7 +129,7 @@ async function main() {
         departmentName: "IT-отдел",
         positionTitle: "Тестировщик",
         phone: "+7 (900) 100-00-04",
-        birthDate: nextWeekBirthdays[0],
+        birthDate: birthdayInPast(today, 1, 28),
       },
       {
         fullName: "Новиков Артём Петрович",
@@ -132,7 +137,7 @@ async function main() {
         departmentName: "Бухгалтерия",
         positionTitle: "Главный бухгалтер",
         phone: "+7 (900) 100-00-05",
-        birthDate: nextWeekBirthdays[1],
+        birthDate: birthdayInPast(today, 2, 45),
         startDate: getCurrentMonthDate(today, 9),
       },
       {
@@ -141,7 +146,7 @@ async function main() {
         departmentName: "Бухгалтерия",
         positionTitle: "Бухгалтер",
         phone: "+7 (900) 100-00-06",
-        birthDate: nextWeekBirthdays[2],
+        birthDate: birthdayInPast(today, 4, 33),
       },
       {
         fullName: "Волков Дмитрий Сергеевич",
@@ -156,7 +161,7 @@ async function main() {
         departmentName: "Отдел кадров",
         positionTitle: "HR менеджер",
         phone: "+7 (900) 100-00-08",
-        birthDate: nextWeekBirthdays[3],
+        birthDate: birthdayInPast(today, 6, 39),
       },
       {
         fullName: "Соколов Андрей Васильевич",

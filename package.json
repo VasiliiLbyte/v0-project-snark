@@ -14,6 +14,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx scripts/seed-demo.ts",
+    "cleanup:data": "tsx scripts/cleanup-data.ts",
     "init:users": "tsx scripts/init-users.ts"
   },
   "dependencies": {

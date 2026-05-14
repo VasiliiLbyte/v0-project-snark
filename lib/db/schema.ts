@@ -56,6 +56,17 @@ export const employeeProfiles = pgTable("employee_profiles", {
   startDate: date("start_date"),
   welcomeNote: text("welcome_note"),
   presence: text("presence").notNull().default("office"),
+  inn: text("inn"),
+  snils: text("snils"),
+  address: text("address"),
+  citizenship: text("citizenship"),
+  anniversaryYears: integer("anniversary_years"),
+  professions: text("professions"),
+  education: text("education"),
+  managerPosition: text("manager_position"),
+  contractEndDate: date("contract_end_date"),
+  isContractor: boolean("is_contractor").notNull().default(false),
+  annualLeaveDays: integer("annual_leave_days").notNull().default(28),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 })
 
@@ -105,6 +116,9 @@ export const vacations = pgTable("vacations", {
   daysTotal: integer("days_total").notNull(),
   daysRemaining: integer("days_remaining").notNull(),
   status: text("status").notNull().default("approved"),
+  type: text("type").notNull().default("annual"),
+  comment: text("comment"),
+  approvedBy: uuid("approved_by").references((): AnyPgColumn => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 })
 
@@ -128,4 +142,46 @@ export const auditLogs = pgTable("audit_logs", {
   metadata: text("metadata"),
   statusCode: integer("status_code"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const tickets = pgTable("tickets", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  authorId: uuid("author_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  category: text("category").notNull().default("it"),
+  subject: text("subject").notNull(),
+  description: text("description"),
+  status: text("status").notNull().default("new"),
+  priority: text("priority").notNull().default("medium"),
+  assigneeId: uuid("assignee_id").references((): AnyPgColumn => users.id, { onDelete: "set null" }),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const events = pgTable("events", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  startAt: timestamp("start_at", { withTimezone: true }).notNull(),
+  endAt: timestamp("end_at", { withTimezone: true }),
+  location: text("location"),
+  category: text("category").notNull().default("corporate"),
+  isAllDay: boolean("is_all_day").notNull().default(false),
+  createdBy: uuid("created_by").references((): AnyPgColumn => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const knowledgeArticles = pgTable("knowledge_articles", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  category: text("category").notNull().default("general"),
+  tags: text("tags"),
+  authorId: uuid("author_id").references((): AnyPgColumn => users.id, { onDelete: "set null" }),
+  isPublished: boolean("is_published").notNull().default(false),
+  viewsCount: integer("views_count").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 })

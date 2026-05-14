@@ -8,28 +8,41 @@ import {
   apiErrorSchema,
   employeeImportResponseSchema,
 } from "@/lib/validators/portal"
+import type { AdminEmployeeUpsertPayload } from "@/types/portal"
 
-type ExcelRow = Record<string, string | number | Date | null | undefined>
+type CellValue = string | number | boolean | Date | null | undefined
+type SheetRow = CellValue[]
 
-const HEADER_ALIASES = {
-  fullName: ["фио", "фамилия+имя+отчество", "фамилия имя отчество"],
-  positionTitle: ["должность"],
-  departmentName: ["отдел"],
-  departmentCode: ["код", "аббревиатура", "код/аббревиатура"],
-  departmentEmail: ["контакты отдела", "email отдела"],
-  phone: ["телефон"],
-  email: ["email", "e-mail", "почта"],
-  birthDate: ["дата рождения"],
-  startDate: ["дата выхода"],
-  welcomeNote: ["приветствие"],
+const HEADER_MARKER = "сотрудник"
+const HEADER_SEARCH_LIMIT = 200
+
+const COLS = {
+  fullName: 0,
+  department: 3,
+  position: 21,
+  inn: 22,
+  snils: 23,
+  birthDate: 24,
+  address: 25,
+  citizenship: 26,
+  anniversaryYears: 27,
+  professions: 29,
+  education: 31,
+  managerPosition: 32,
+  contractEndDate: 33,
+  isContractor: 34,
 } as const
 
-function normalizeHeader(value: string): string {
-  return value.toLowerCase().replace(/\s+/g, " ").trim()
+function toTrimmedString(value: CellValue): string {
+  if (value === null || value === undefined) return ""
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? "" : value.toISOString()
+  }
+  return String(value).trim()
 }
 
-function normalizeDate(value: string | number | Date | null | undefined): string | undefined {
-  if (!value && value !== 0) return undefined
+function normalizeDate(value: CellValue): string | undefined {
+  if (value === null || value === undefined || value === "") return undefined
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     return value.toISOString().slice(0, 10)
   }
@@ -41,33 +54,88 @@ function normalizeDate(value: string | number | Date | null | undefined): string
   }
   const asString = String(value).trim()
   if (!asString) return undefined
-  const maybeDate = new Date(asString)
-  if (!Number.isNaN(maybeDate.getTime())) {
-    return maybeDate.toISOString().slice(0, 10)
-  }
   const ruMatch = asString.match(/^(\d{2})\.(\d{2})\.(\d{4})$/)
   if (ruMatch) {
     const [, day, month, year] = ruMatch
     return `${year}-${month}-${day}`
   }
+  const isoMatch = asString.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`
+  const maybeDate = new Date(asString)
+  if (!Number.isNaN(maybeDate.getTime())) {
+    return maybeDate.toISOString().slice(0, 10)
+  }
   return undefined
 }
 
-function buildHeaderMap(headers: string[]): Record<string, string | undefined> {
-  const normalized = headers.map((header) => ({ source: header, normalized: normalizeHeader(header) }))
-  const result: Record<string, string | undefined> = {}
-
-  for (const targetKey of Object.keys(HEADER_ALIASES) as Array<keyof typeof HEADER_ALIASES>) {
-    const aliases = HEADER_ALIASES[targetKey] as readonly string[]
-    const found = normalized.find((item) => aliases.includes(item.normalized))
-    result[targetKey] = found?.source
-  }
-  return result
+function parseYesNo(value: CellValue): boolean | undefined {
+  if (value === null || value === undefined || value === "") return undefined
+  if (typeof value === "boolean") return value
+  const normalized = String(value).trim().toLowerCase()
+  if (!normalized) return undefined
+  if (["да", "yes", "true", "1", "y"].includes(normalized)) return true
+  if (["нет", "no", "false", "0", "n"].includes(normalized)) return false
+  return undefined
 }
 
-function getCellValue(row: ExcelRow, key: string | undefined): string | number | Date | null | undefined {
-  if (!key) return undefined
-  return row[key]
+function parseInteger(value: CellValue): number | undefined {
+  if (value === null || value === undefined || value === "") return undefined
+  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value)
+  const cleaned = String(value).trim().replace(/[^\d-]/g, "")
+  if (!cleaned) return undefined
+  const parsed = Number.parseInt(cleaned, 10)
+  return Number.isNaN(parsed) ? undefined : parsed
+}
+
+function findHeaderRowIndex(rows: SheetRow[]): number {
+  const limit = Math.min(rows.length, HEADER_SEARCH_LIMIT)
+  for (let i = 0; i < limit; i += 1) {
+    const cell = rows[i]?.[COLS.fullName]
+    if (toTrimmedString(cell).toLowerCase() === HEADER_MARKER) {
+      return i
+    }
+  }
+  return -1
+}
+
+function buildPayloadFromRow(row: SheetRow): AdminEmployeeUpsertPayload | null {
+  const fullName = toTrimmedString(row[COLS.fullName])
+  if (!fullName) return null
+
+  const positionTitle = toTrimmedString(row[COLS.position])
+  const departmentName = toTrimmedString(row[COLS.department])
+
+  if (!positionTitle || !departmentName) return null
+
+  const inn = toTrimmedString(row[COLS.inn]) || undefined
+  const snils = toTrimmedString(row[COLS.snils]) || undefined
+  const address = toTrimmedString(row[COLS.address]) || undefined
+  const citizenship = toTrimmedString(row[COLS.citizenship]) || undefined
+  const professions = toTrimmedString(row[COLS.professions]) || undefined
+  const education = toTrimmedString(row[COLS.education]) || undefined
+  const managerPosition = toTrimmedString(row[COLS.managerPosition]) || undefined
+  const birthDate = normalizeDate(row[COLS.birthDate])
+  const contractEndDate = normalizeDate(row[COLS.contractEndDate])
+  const anniversaryYears = parseInteger(row[COLS.anniversaryYears])
+  const isContractor = parseYesNo(row[COLS.isContractor])
+
+  return {
+    fullName,
+    positionTitle,
+    departmentName,
+    birthDate,
+    contractEndDate,
+    inn,
+    snils,
+    address,
+    citizenship,
+    anniversaryYears,
+    professions,
+    education,
+    managerPosition,
+    isContractor,
+    status: "active",
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -104,66 +172,43 @@ export async function POST(request: NextRequest) {
     }
 
     const worksheet = workbook.Sheets[firstSheetName]
-    const rows = XLSX.utils.sheet_to_json<ExcelRow>(worksheet, {
-      defval: "",
+    const rows = XLSX.utils.sheet_to_json<SheetRow>(worksheet, {
+      header: 1,
       raw: true,
+      defval: null,
+      blankrows: false,
     })
 
-    if (rows.length === 0) {
-      const response = employeeImportResponseSchema.parse({
-        created: 0,
-        updated: 0,
-        errors: [],
-      })
-      return NextResponse.json(response)
-    }
-
-    const headers = Object.keys(rows[0] ?? {})
-    const headerMap = buildHeaderMap(headers)
-    const requiredHeaders = ["fullName", "positionTitle", "departmentName", "email"] as const
-    const missing = requiredHeaders.filter((item) => !headerMap[item])
-
-    if (missing.length > 0) {
+    const headerIndex = findHeaderRowIndex(rows)
+    if (headerIndex === -1) {
       const payload = apiErrorSchema.parse({
-        error: "Не найдены обязательные колонки",
+        error: "Не найдена строка-заголовок \"Сотрудник\" в первой колонке",
         code: "MISSING_COLUMNS",
-        details: missing.join(", "),
+        details: `Проверено ${Math.min(rows.length, HEADER_SEARCH_LIMIT)} строк`,
       })
       return NextResponse.json(payload, { status: 400 })
     }
 
-    const validRows: Array<(typeof adminEmployeeUpsertSchema)["_output"]> = []
+    const validRows: AdminEmployeeUpsertPayload[] = []
     const preValidationErrors: Array<{ row: number; reason: string }> = []
 
-    rows.forEach((row, index) => {
-      const fullName = String(getCellValue(row, headerMap.fullName) ?? "").trim()
-      const positionTitle = String(getCellValue(row, headerMap.positionTitle) ?? "").trim()
-      const departmentName = String(getCellValue(row, headerMap.departmentName) ?? "").trim()
-      const email = String(getCellValue(row, headerMap.email) ?? "").trim().toLowerCase()
+    for (let i = headerIndex + 1; i < rows.length; i += 1) {
+      const row = rows[i]
+      if (!row || row.length === 0) continue
+      const payload = buildPayloadFromRow(row)
+      if (!payload) continue
 
-      const parsed = adminEmployeeUpsertSchema.safeParse({
-        fullName,
-        positionTitle,
-        departmentName,
-        departmentCode: String(getCellValue(row, headerMap.departmentCode) ?? "").trim() || undefined,
-        departmentEmail: String(getCellValue(row, headerMap.departmentEmail) ?? "").trim().toLowerCase() || undefined,
-        phone: String(getCellValue(row, headerMap.phone) ?? "").trim() || undefined,
-        email,
-        birthDate: normalizeDate(getCellValue(row, headerMap.birthDate)),
-        startDate: normalizeDate(getCellValue(row, headerMap.startDate)),
-        welcomeNote: String(getCellValue(row, headerMap.welcomeNote) ?? "").trim() || undefined,
-      })
-
+      const parsed = adminEmployeeUpsertSchema.safeParse(payload)
       if (!parsed.success) {
+        const firstIssue = parsed.error.issues[0]
         preValidationErrors.push({
-          row: index + 2,
-          reason: "Некорректные данные строки",
+          row: i + 1,
+          reason: firstIssue ? `${firstIssue.path.join(".") || "row"}: ${firstIssue.message}` : "Некорректные данные строки",
         })
-        return
+        continue
       }
-
       validRows.push(parsed.data)
-    })
+    }
 
     const result = await getPortalRepositoryServer().importEmployees(validRows)
     const response = employeeImportResponseSchema.parse({

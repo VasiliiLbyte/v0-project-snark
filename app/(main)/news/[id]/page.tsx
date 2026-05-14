@@ -1,5 +1,6 @@
 import Link from "next/link"
 import ReactMarkdown from "react-markdown"
+import { Newspaper } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { loadNewsById } from "@/lib/portal-data/loaders"
@@ -44,7 +45,9 @@ export default async function NewsDetailPage({ params }: NewsDetailPageProps) {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={item.coverUrl} alt={item.title} className="h-full w-full object-cover" />
           ) : (
-            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">16:9</div>
+            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#16223b] to-[#28367b]">
+              <Newspaper className="h-10 w-10 text-white opacity-40" aria-hidden="true" />
+            </div>
           )}
         </div>
         <div className="space-y-4 p-6">

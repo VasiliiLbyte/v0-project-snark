@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
-import { Building2, Mail, Phone } from 'lucide-react'
+import { Mail, Phone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -15,9 +15,9 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 import { useProfile } from '@/hooks/use-profile'
+import { VacationTab } from '@/components/profile/vacation-tab'
 import type { ProfileData } from '@/types/portal'
 
 type ProfileTabId = 'my_profile' | 'my_department' | 'documents' | 'vacation'
@@ -211,49 +211,9 @@ export function Profile({ data }: { data: ProfileData }) {
       )}
 
       {activeTab === 'vacation' && (
-        <div className="grid gap-4 lg:grid-cols-3">
-          <Card className="p-4">
-            <p className="text-sm text-muted-foreground">Остаток дней</p>
-            <p className="text-3xl font-bold text-card-foreground">{data.vacationTab?.daysRemaining ?? 0}</p>
-          </Card>
-          <Card className="p-4">
-            <p className="text-sm text-muted-foreground">Следующий отпуск</p>
-            <p className="text-sm font-medium text-card-foreground">
-              {data.vacationTab?.nextVacation
-                ? `${data.vacationTab.nextVacation.startDate} — ${data.vacationTab.nextVacation.endDate}`
-                : 'Не запланирован'}
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Дней до отпуска: {data.vacationTab?.nextVacation ? data.vacationTab.nextVacation.daysUntil : '-'}
-            </p>
-          </Card>
-          <Card className="p-4">
-            <p className="text-sm text-muted-foreground">Статус</p>
-            <p className="mt-1 flex items-center gap-2 text-sm"><Building2 className="h-4 w-4" /> {statusButtons.find((item) => item.value === status)?.label}</p>
-          </Card>
-
-          <Card className="lg:col-span-3 p-4">
-            <h3 className="mb-3 font-semibold text-card-foreground">История отпусков</h3>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Период</TableHead>
-                  <TableHead>Дней</TableHead>
-                  <TableHead>Статус</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(data.vacationTab?.history ?? data.vacations).map((vacation) => (
-                  <TableRow key={vacation.id}>
-                    <TableCell>{vacation.startDate} — {vacation.endDate}</TableCell>
-                    <TableCell>{vacation.daysTotal}</TableCell>
-                    <TableCell>{vacation.status === 'approved' ? 'Утверждён' : 'На согласовании'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
-        </div>
+        <VacationTab
+          presenceLabel={statusButtons.find((item) => item.value === status)?.label ?? 'В офисе'}
+        />
       )}
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>

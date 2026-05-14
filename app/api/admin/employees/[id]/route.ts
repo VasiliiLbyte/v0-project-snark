@@ -63,6 +63,44 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   }
 }
 
+export async function PUT(request: NextRequest, context: RouteContext) {
+  try {
+    const auth = requireRole(request, ["admin", "hr_manager"])
+    const { id } = await context.params
+    const body = await request.json()
+
+    const parsed = adminEmployeeUpsertSchema.safeParse(body)
+    if (!parsed.success) {
+      const payload = apiErrorSchema.parse({
+        error: "Некорректные данные сотрудника",
+        code: "INVALID_PAYLOAD",
+      })
+      return NextResponse.json(payload, { status: 400 })
+    }
+
+    const updated = await getPortalRepositoryServer().updateAdminEmployee(id, parsed.data)
+    await writeAuditLog({
+      userId: auth.userId,
+      action: "admin:employees:update",
+      resourceType: "users",
+      resourceId: id,
+      statusCode: 200,
+    })
+    return NextResponse.json(updated)
+  } catch (error) {
+    const known = error as Partial<AuthError>
+    const status = known.status ?? 500
+    const payload =
+      status === 500
+        ? apiErrorSchema.parse({ error: "Не удалось обновить сотрудника", code: "INTERNAL_ERROR" })
+        : apiErrorSchema.parse({
+            error: known.message ?? "Ошибка доступа",
+            code: known.code ?? "AUTH_ERROR",
+          })
+    return NextResponse.json(payload, { status })
+  }
+}
+
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     const auth = requireRole(request, ["admin"])

@@ -21,12 +21,20 @@ export interface NewsItem {
 }
 
 export interface BirthdayPerson {
-  id?: string
+  id: string
   name: string
-  position?: string
   department: string
+  position: string
   avatar: string
-  email?: string
+  avatarUrl?: string | null
+  birthDate: string
+  age: number
+}
+
+export interface BirthdaysData {
+  today: BirthdayPerson[]
+  thisWeek: BirthdayPerson[]
+  upcoming: BirthdayPerson[]
 }
 
 export interface NewEmployeeItem {
@@ -35,7 +43,9 @@ export interface NewEmployeeItem {
   position: string
   department: string
   avatar: string
+  avatarUrl?: string | null
   startDate: string
+  welcomeText?: string | null
 }
 
 export interface TaskItem {
@@ -49,13 +59,14 @@ export interface ServiceCardItem {
   description: string
   icon: string
   color: string
+  href: string
 }
 
 export interface DashboardData {
   welcomeName: string
   quickActions: QuickAction[]
   recentNews: NewsItem[]
-  todayBirthdays: BirthdayPerson[]
+  birthdays: BirthdaysData
   newEmployees: NewEmployeeItem[]
   myTasks: TaskItem[]
   serviceCards: ServiceCardItem[]
@@ -63,6 +74,7 @@ export interface DashboardData {
 
 export interface Employee {
   id: number
+  userId: string
   name: string
   position: string
   department: string
@@ -71,6 +83,27 @@ export interface Employee {
   office: string
   status: "online" | "away" | "offline"
   avatar: string
+  avatarUrl?: string
+
+  inn?: string | null
+  snils?: string | null
+  birthDate?: string | null
+  address?: string | null
+  citizenship?: string | null
+  anniversaryYears?: number | null
+  professions?: string | null
+  education?: string | null
+  managerPosition?: string | null
+  contractEndDate?: string | null
+  isContractor: boolean
+  hireDate?: string | null
+  welcomeText?: string | null
+  isNew: boolean
+  manager?: {
+    id: string
+    fullName: string
+    positionTitle: string | null
+  } | null
 }
 
 export interface Department {
@@ -166,6 +199,9 @@ export interface ProfileTask {
   status: "В работе" | "Новая" | "Запланирована"
 }
 
+export type VacationType = "annual" | "sick" | "unpaid" | "maternity"
+export type VacationStatus = "pending" | "approved" | "rejected"
+
 export interface VacationItem {
   id: string
   userId: string
@@ -173,8 +209,42 @@ export interface VacationItem {
   endDate: string
   daysTotal: number
   daysRemaining: number
-  status: "approved" | "pending"
+  status: VacationStatus
+  type: VacationType
+  comment: string | null
+  approvedBy: string | null
   createdAt: string
+}
+
+export interface VacationBalance {
+  annual: number
+  used: number
+  remaining: number
+}
+
+export interface VacationCreatePayload {
+  startDate: string
+  endDate: string
+  type: VacationType
+  comment?: string | null
+}
+
+export interface VacationAdminUpdatePayload {
+  status: "approved" | "rejected"
+  comment?: string | null
+}
+
+export interface AdminVacationItem extends VacationItem {
+  authorName: string
+  authorDepartment: string | null
+}
+
+export interface VacationsListResponse {
+  items: VacationItem[]
+}
+
+export interface AdminVacationsListResponse {
+  items: AdminVacationItem[]
 }
 
 export interface ProfileData {
@@ -276,6 +346,53 @@ export interface SidebarItem {
   roles?: UserRole[]
 }
 
+export interface DepartmentTreeHead {
+  id: string
+  fullName: string
+  positionTitle: string | null
+  avatarUrl: string | null
+}
+
+export interface DepartmentTreeNode {
+  id: string
+  name: string
+  code: string | null
+  description: string | null
+  head: DepartmentTreeHead | null
+  employeeCount: number
+  children: DepartmentTreeNode[]
+}
+
+export interface DepartmentsTreeResponse {
+  departments: DepartmentTreeNode[]
+}
+
+export interface AdminDepartmentItem {
+  id: string
+  name: string
+  code: string | null
+  description: string | null
+  parentId: string | null
+  parentName: string | null
+  headUserId: string | null
+  headName: string | null
+  contactEmail: string | null
+  employeeCount: number
+}
+
+export interface AdminDepartmentsResponse {
+  items: AdminDepartmentItem[]
+}
+
+export interface AdminDepartmentUpsertPayload {
+  name: string
+  code?: string | null
+  description?: string | null
+  parentId?: string | null
+  headUserId?: string | null
+  contactEmail?: string | null
+}
+
 export interface AdminEmployeeItem {
   id: string
   fullName: string
@@ -294,6 +411,17 @@ export interface AdminEmployeeItem {
   isActive: boolean
   createdAt: string
   updatedAt: string
+  inn?: string | null
+  snils?: string | null
+  address?: string | null
+  citizenship?: string | null
+  anniversaryYears?: number | null
+  professions?: string | null
+  education?: string | null
+  managerPosition?: string | null
+  contractEndDate?: string | null
+  isContractor: boolean
+  isNew: boolean
 }
 
 export interface AdminEmployeesResponse {
@@ -307,11 +435,21 @@ export interface AdminEmployeeUpsertPayload {
   departmentCode?: string
   departmentEmail?: string
   phone?: string
-  email: string
+  email?: string
   birthDate?: string
   startDate?: string
   welcomeNote?: string
   status?: "active" | "vacation" | "remote" | "dismissed"
+  inn?: string
+  snils?: string
+  address?: string
+  citizenship?: string
+  anniversaryYears?: number
+  professions?: string
+  education?: string
+  managerPosition?: string
+  contractEndDate?: string
+  isContractor?: boolean
 }
 
 export interface EmployeeImportErrorItem {
@@ -380,4 +518,135 @@ export interface NewsCoverUploadResponse {
   objectKey: string
   fileUrl: string
   expiresAt: string
+}
+
+export type TicketCategory = "it" | "aho" | "hr" | "other"
+export type TicketStatus = "new" | "in_progress" | "resolved" | "closed"
+export type TicketPriority = "low" | "medium" | "high" | "critical"
+
+export interface Ticket {
+  id: string
+  authorId: string
+  authorName: string
+  category: TicketCategory
+  subject: string
+  description: string | null
+  status: TicketStatus
+  priority: TicketPriority
+  assigneeId: string | null
+  assigneeName: string | null
+  resolvedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TicketsQuery {
+  status?: TicketStatus | "all"
+  page?: number
+  limit?: number
+}
+
+export interface TicketsListResponse {
+  items: Ticket[]
+  total: number
+  page: number
+  limit: number
+}
+
+export interface TicketDetailResponse {
+  item: Ticket | null
+}
+
+export interface TicketCreatePayload {
+  category: TicketCategory
+  subject: string
+  description?: string | null
+  priority: TicketPriority
+}
+
+export interface TicketAdminUpdatePayload {
+  status?: TicketStatus
+  assigneeId?: string | null
+}
+
+export type EventCategory = "meeting" | "birthday" | "corporate" | "deadline" | "holiday"
+
+export interface CalendarEvent {
+  id: string
+  title: string
+  description: string | null
+  startAt: string
+  endAt: string | null
+  location: string | null
+  category: EventCategory
+  isAllDay: boolean
+  createdBy: string | null
+  createdAt: string
+  isVirtual: boolean
+}
+
+export interface EventsMonthQuery {
+  month: string
+  category?: EventCategory | "all"
+}
+
+export interface EventsListResponse {
+  items: CalendarEvent[]
+  month: string
+}
+
+export interface EventDetailResponse {
+  item: CalendarEvent | null
+}
+
+export interface EventCreatePayload {
+  title: string
+  description?: string | null
+  startAt: string
+  endAt?: string | null
+  location?: string | null
+  category: EventCategory
+  isAllDay?: boolean
+}
+
+export type KnowledgeCategory = "onboarding" | "it" | "hr" | "safety" | "general"
+
+export interface KnowledgeArticle {
+  id: string
+  title: string
+  content: string
+  category: KnowledgeCategory
+  tags: string[]
+  authorId: string | null
+  authorName: string
+  isPublished: boolean
+  viewsCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface KnowledgeListQuery {
+  category?: "all" | KnowledgeCategory
+  search?: string
+  page?: number
+  limit?: number
+}
+
+export interface KnowledgeListResponse {
+  items: KnowledgeArticle[]
+  total: number
+  page: number
+  limit: number
+}
+
+export interface KnowledgeDetailResponse {
+  item: KnowledgeArticle | null
+}
+
+export interface KnowledgeEditorPayload {
+  title: string
+  content: string
+  category: KnowledgeCategory
+  tags?: string | null
+  isPublished?: boolean
 }

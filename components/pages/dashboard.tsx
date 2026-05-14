@@ -1,8 +1,8 @@
+import Link from "next/link"
 import type { DashboardData } from "@/types/portal"
 import {
   Bell,
   BookOpen,
-  Cake,
   Calendar,
   CheckCircle,
   ChevronRight,
@@ -11,9 +11,12 @@ import {
   FileText,
   HelpCircle,
   Newspaper,
+  Pin,
   Users,
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
+import { BirthdayWidget } from "@/components/widgets/BirthdayWidget"
+import { NewEmployeesWidget } from "@/components/widgets/NewEmployeesWidget"
 
 const iconMap = {
   Users,
@@ -25,13 +28,42 @@ const iconMap = {
   DoorOpen,
 } as const
 
+const NEWS_CATEGORY_LABELS: Record<string, string> = {
+  company: "Компания",
+  projects: "Проекты",
+  people: "Люди",
+  important: "Важно",
+}
+
+function newsCategoryLabel(category: string): string {
+  return NEWS_CATEGORY_LABELS[category] ?? category
+}
+
+function formatNewsDate(value: string | null | undefined): string {
+  if (!value) return ""
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ""
+  return d.toLocaleDateString("ru-RU")
+}
+
 export function Dashboard({ data }: { data: DashboardData }) {
-  const currentDate = new Date().toLocaleDateString('ru-RU', {
+  const now = new Date()
+  const currentDate = now.toLocaleDateString('ru-RU', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   })
+  const hour = now.getHours()
+  const greeting =
+    hour < 6 ? 'Доброй ночи' :
+    hour < 12 ? 'Доброе утро' :
+    hour < 18 ? 'Добрый день' : 'Добрый вечер'
+
+  const pinnedHero = data.recentNews.find((n) => n.isPinned) ?? null
+  const restNews = pinnedHero
+    ? data.recentNews.filter((n) => n.id !== pinnedHero.id)
+    : data.recentNews
 
   return (
     <div className="space-y-6">
@@ -51,13 +83,15 @@ export function Dashboard({ data }: { data: DashboardData }) {
         
         <div className="relative z-10">
           <h1 className="text-2xl font-bold text-white md:text-3xl">
-            Добрый день, {data.welcomeName}!
+            {greeting}, {data.welcomeName}!
           </h1>
           <p className="mt-2 text-white/70">{currentDate}</p>
-          {data.todayBirthdays.length > 0 && (
+          {data.birthdays.today.length > 0 && (
             <div className="mt-4 flex items-center gap-2 text-sm text-white/80">
-              <Cake className="h-4 w-4" />
-              <span>Сегодня день рождения: {data.todayBirthdays.map((b) => b.name).join(", ")}</span>
+              <span aria-hidden="true">🎂</span>
+              <span>
+                Сегодня день рождения: {data.birthdays.today.map((b) => b.name).join(", ")}
+              </span>
             </div>
           )}
         </div>
@@ -68,8 +102,9 @@ export function Dashboard({ data }: { data: DashboardData }) {
         {data.quickActions.map((action) => {
           const Icon = iconMap[action.icon as keyof typeof iconMap] ?? Users
           return (
-            <button
+            <Link
               key={action.label}
+              href={action.href}
               className="group flex flex-col items-center gap-3 rounded-xl bg-card p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
             >
               <div className="rounded-lg bg-primary/10 p-3 transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
@@ -78,7 +113,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
               <span className="text-center text-sm font-medium text-card-foreground">
                 {action.label}
               </span>
-            </button>
+            </Link>
           )
         })}
       </div>
@@ -95,94 +130,88 @@ export function Dashboard({ data }: { data: DashboardData }) {
               <Bell className="h-5 w-5 text-muted-foreground" />
             </div>
 
-            <div className="divide-y divide-border">
-              {data.recentNews.map((news) => (
-                <button
-                  key={news.id}
-                  className="flex w-full items-start gap-4 p-4 text-left transition-colors hover:bg-muted/50"
-                >
-                  <div className="h-16 w-24 shrink-0 rounded-lg bg-muted" />
-                  <div className="flex-1">
-                    <h3 className="font-medium text-card-foreground line-clamp-2">
-                      {news.title}
-                    </h3>
-                    <div className="mt-2 flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">
-                        {news.publishedAt ?? news.createdAt}
-                      </span>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          news.isPinned
-                            ? 'bg-destructive/10 text-destructive'
-                            : 'bg-success/10 text-success'
-                        }`}
-                      >
-                        {news.category}
-                      </span>
+            {data.recentNews.length === 0 ? (
+              <div className="flex flex-col items-center py-8 text-muted-foreground">
+                <Newspaper className="mb-2 h-10 w-10 opacity-40" aria-hidden="true" />
+                <p className="text-sm">Пока нет опубликованных новостей</p>
+              </div>
+            ) : (
+              <>
+                {pinnedHero && (
+                  <Link
+                    href={`/news/${pinnedHero.id}`}
+                    className="block border-b border-primary/20 bg-primary/5 p-4 transition-colors hover:bg-primary/10"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-20 w-28 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#16223b] to-[#28367b]">
+                        <Newspaper className="h-7 w-7 text-white opacity-40" aria-hidden="true" />
+                      </div>
+                      <div className="flex-1">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
+                          <Pin className="h-3 w-3" aria-hidden="true" />
+                          Важно
+                        </span>
+                        <h3 className="mt-2 font-semibold text-card-foreground line-clamp-2">
+                          {pinnedHero.title}
+                        </h3>
+                        <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>{formatNewsDate(pinnedHero.publishedAt ?? pinnedHero.createdAt)}</span>
+                          <span>{newsCategoryLabel(pinnedHero.category)}</span>
+                        </div>
+                      </div>
+                      <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
                     </div>
-                  </div>
-                  <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-                </button>
-              ))}
-            </div>
+                  </Link>
+                )}
+
+                <div className="divide-y divide-border">
+                  {restNews.map((news) => (
+                    <Link
+                      key={news.id}
+                      href={`/news/${news.id}`}
+                      className="flex w-full items-start gap-4 p-4 text-left transition-colors hover:bg-muted/50"
+                    >
+                      <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#16223b] to-[#28367b]">
+                        <Newspaper className="h-6 w-6 text-white opacity-40" aria-hidden="true" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-medium text-card-foreground line-clamp-2">
+                          {news.title}
+                        </h3>
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            {formatNewsDate(news.publishedAt ?? news.createdAt)}
+                          </span>
+                          <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
+                            {newsCategoryLabel(news.category)}
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+                    </Link>
+                  ))}
+                </div>
+              </>
+            )}
 
             <div className="border-t border-border p-4">
-              <button className="w-full rounded-lg border border-border py-2.5 text-sm font-medium text-primary transition-colors hover:bg-muted">
+              <Link
+                href="/news"
+                className="block w-full rounded-lg border border-border py-2.5 text-center text-sm font-medium text-primary transition-colors hover:bg-muted"
+              >
                 Все новости
-              </button>
+              </Link>
             </div>
           </Card>
         </div>
 
         {/* Sidebar - 1/3 width */}
         <div className="space-y-6">
-          {/* Today Block */}
-          <Card className="p-4">
-            <h3 className="mb-4 font-bold text-card-foreground">Сегодня</h3>
-            
-            {/* Birthdays */}
-            <div className="mb-4">
-              <div className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                <Cake className="h-4 w-4" />
-                <span>Именинники</span>
-              </div>
-              <div className="space-y-2">
-                {data.todayBirthdays.map((person, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-xs font-bold text-accent-foreground">
-                      {person.avatar}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-card-foreground">{person.name}</p>
-                      <p className="text-xs text-muted-foreground">{person.department}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Card>
+          {/* Birthdays */}
+          <BirthdayWidget data={data.birthdays} />
 
           {/* New Employees */}
-          <Card className="p-4">
-            <h3 className="mb-4 font-bold text-card-foreground">Новые сотрудники</h3>
-            <div className="space-y-2">
-              {data.newEmployees.length > 0 ? (
-                data.newEmployees.map((person) => (
-                  <div key={person.id} className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-xs font-bold text-accent-foreground">
-                      {person.avatar}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-card-foreground">{person.name}</p>
-                      <p className="text-xs text-muted-foreground">{person.department}</p>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">За последние 30 дней новых сотрудников нет</p>
-              )}
-            </div>
-          </Card>
+          <NewEmployeesWidget items={data.newEmployees} />
 
           {/* My Tasks */}
           <Card className="p-4">
@@ -216,8 +245,9 @@ export function Dashboard({ data }: { data: DashboardData }) {
         {data.serviceCards.map((service) => {
           const Icon = iconMap[service.icon as keyof typeof iconMap] ?? Users
           return (
-            <button
+            <Link
               key={service.title}
+              href={service.href}
               className="group relative overflow-hidden rounded-xl bg-card p-6 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
             >
               <div className={`mb-4 inline-flex rounded-lg p-3 ${service.color} text-white`}>
@@ -226,7 +256,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
               <h3 className="font-bold text-card-foreground">{service.title}</h3>
               <p className="mt-1 text-sm text-muted-foreground">{service.description}</p>
               <ChevronRight className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-            </button>
+            </Link>
           )
         })}
       </div>

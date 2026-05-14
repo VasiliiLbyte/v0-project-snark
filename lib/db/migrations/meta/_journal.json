@@ -36,6 +36,41 @@
       "when": 1777969094757,
       "tag": "0004_free_darkhawk",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1778660966334,
+      "tag": "0005_abandoned_next_avengers",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1778693822264,
+      "tag": "0006_normal_lorna_dane",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1778694959215,
+      "tag": "0007_bent_zeigeist",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1778696242395,
+      "tag": "0008_cool_pete_wisdom",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1778744685579,
+      "tag": "0009_blushing_daredevil",
+      "breakpoints": true
     }
   ]
 }

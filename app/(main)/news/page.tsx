@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Pin } from "lucide-react"
+import { Newspaper, Pin } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { loadNewsData } from "@/lib/portal-data/loaders"
@@ -65,13 +65,19 @@ export default async function NewsPage({ searchParams }: NewsPageProps) {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {data.items.map((item) => (
           <Link key={item.id} href={`/news/${item.id}`}>
-            <Card className="h-full overflow-hidden transition hover:shadow-md">
+            <Card
+              className={`h-full overflow-hidden transition hover:shadow-md ${
+                item.isPinned ? "border-2 border-primary/30" : ""
+              }`}
+            >
               <div className="relative aspect-video bg-muted">
                 {item.coverUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={item.coverUrl} alt={item.title} className="h-full w-full object-cover" />
                 ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">16:9</div>
+                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#16223b] to-[#28367b]">
+                    <Newspaper className="h-10 w-10 text-white opacity-40" aria-hidden="true" />
+                  </div>
                 )}
                 {item.isPinned && (
                   <div className="absolute left-2 top-2 flex items-center gap-1 rounded bg-[#16223b] px-2 py-1 text-xs text-white">

@@ -1,15 +1,32 @@
 import type {
+  AdminDepartmentItem,
+  AdminDepartmentUpsertPayload,
+  AdminDepartmentsResponse,
   AdminEmployeeItem,
   AdminEmployeeUpsertPayload,
   AdminEmployeesResponse,
+  AdminVacationItem,
+  BirthdaysData,
+  CalendarEvent,
   ContactsData,
   DashboardData,
+  DepartmentsTreeResponse,
   DocumentMetadataCreatePayload,
   DocumentMetadataCreateResponse,
   DocumentsQuery,
   DocumentsData,
+  Employee,
   EmployeeImportResult,
   EmployeesQuery,
+  EventCreatePayload,
+  EventsListResponse,
+  EventsMonthQuery,
+  KnowledgeArticle,
+  KnowledgeDetailResponse,
+  KnowledgeEditorPayload,
+  KnowledgeListQuery,
+  KnowledgeListResponse,
+  NewEmployeeItem,
   NewsDetailResponse,
   NewsEditorPayload,
   NewsListQuery,
@@ -18,11 +35,35 @@ import type {
   ProfilePresenceUpdatePayload,
   ProfileUpdatePayload,
   SidebarItem,
+  Ticket,
+  TicketAdminUpdatePayload,
+  TicketCreatePayload,
+  TicketsListResponse,
+  TicketsQuery,
+  VacationAdminUpdatePayload,
+  VacationBalance,
+  VacationCreatePayload,
+  VacationItem,
+  VacationStatus,
 } from "@/types/portal"
+import type { UserRole } from "@/types/auth"
 
 export interface PortalRepository {
   getDashboardData(): Promise<DashboardData>
+  getBirthdays(): Promise<BirthdaysData>
+  getNewEmployees(): Promise<NewEmployeeItem[]>
   getContactsData(query?: EmployeesQuery): Promise<ContactsData>
+  getEmployeeById(id: string): Promise<{ item: Employee | null }>
+  getDepartmentsTree(): Promise<DepartmentsTreeResponse>
+  listAdminDepartments(): Promise<AdminDepartmentsResponse>
+  getAdminDepartmentById(id: string): Promise<{ item: AdminDepartmentItem | null }>
+  createDepartment(payload: AdminDepartmentUpsertPayload): Promise<AdminDepartmentItem>
+  updateDepartment(
+    id: string,
+    payload: AdminDepartmentUpsertPayload
+  ): Promise<AdminDepartmentItem>
+  deleteDepartment(id: string): Promise<void>
+
   getDocumentsData(
     query?: DocumentsQuery,
     requester?: { role: string; userId?: string; departmentId?: string | null }
@@ -45,4 +86,42 @@ export interface PortalRepository {
   updateNews(id: string, payload: NewsEditorPayload): Promise<NewsDetailResponse["item"]>
   deleteNews(id: string): Promise<void>
   getSidebarItems(): Promise<SidebarItem[]>
+  listMyTickets(authorId: string, query?: TicketsQuery): Promise<TicketsListResponse>
+  listAdminTickets(query?: TicketsQuery): Promise<TicketsListResponse>
+  getTicketById(
+    id: string,
+    requester: { userId: string; role: UserRole }
+  ): Promise<{ item: Ticket | null }>
+  createTicket(payload: TicketCreatePayload & { authorId: string }): Promise<Ticket>
+  updateAdminTicket(id: string, payload: TicketAdminUpdatePayload): Promise<Ticket>
+  listEventsForMonth(query: EventsMonthQuery): Promise<EventsListResponse>
+  createEvent(payload: EventCreatePayload & { createdBy: string }): Promise<CalendarEvent>
+  deleteEvent(id: string): Promise<void>
+  listMyVacations(userId: string): Promise<VacationItem[]>
+  getMyVacationBalance(userId: string): Promise<VacationBalance>
+  createVacation(
+    payload: VacationCreatePayload & { userId: string; daysTotal: number }
+  ): Promise<VacationItem>
+  listAdminVacations(filter?: { status?: VacationStatus }): Promise<AdminVacationItem[]>
+  updateAdminVacation(
+    id: string,
+    payload: VacationAdminUpdatePayload & { approvedBy: string }
+  ): Promise<VacationItem>
+  listKnowledgeArticles(
+    query?: KnowledgeListQuery,
+    includeDrafts?: boolean
+  ): Promise<KnowledgeListResponse>
+  getKnowledgeArticleById(
+    id: string,
+    includeDrafts?: boolean
+  ): Promise<KnowledgeDetailResponse>
+  incrementKnowledgeArticleViews(id: string): Promise<void>
+  createKnowledgeArticle(
+    payload: KnowledgeEditorPayload & { authorId: string }
+  ): Promise<KnowledgeArticle>
+  updateKnowledgeArticle(
+    id: string,
+    payload: KnowledgeEditorPayload
+  ): Promise<KnowledgeArticle>
+  deleteKnowledgeArticle(id: string): Promise<void>
 }
