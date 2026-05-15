@@ -452,6 +452,31 @@ export interface AdminEmployeeUpsertPayload {
   isContractor?: boolean
 }
 
+export interface AdminPortalUserItem {
+  id: string
+  email: string
+  firstName: string
+  lastName: string
+  role: UserRole
+  isActive: boolean
+  departmentName: string | null
+  createdAt: string
+  lastLoginAt: string | null
+}
+
+export interface AdminPortalUsersResponse {
+  items: AdminPortalUserItem[]
+}
+
+export interface AdminPortalUserCreatePayload {
+  email: string
+  password: string
+  firstName: string
+  lastName: string
+  role: UserRole
+  departmentId?: string | null
+}
+
 export interface EmployeeImportErrorItem {
   row: number
   reason: string

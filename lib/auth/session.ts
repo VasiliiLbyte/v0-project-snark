@@ -71,6 +71,13 @@ export async function revokeSession(refreshToken: string) {
   return Boolean(revoked)
 }
 
+export async function revokeAllRefreshTokensForUser(userId: string): Promise<void> {
+  await db
+    .update(refreshTokens)
+    .set({ revokedAt: new Date() })
+    .where(and(eq(refreshTokens.userId, userId), isNull(refreshTokens.revokedAt)))
+}
+
 export async function rotateSession(params: {
   sessionId: string
   refreshToken: string

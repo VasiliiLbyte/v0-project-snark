@@ -59,6 +59,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Аккаунт деактивирован" }, { status: 403 })
     }
 
+    try {
+      const now = new Date()
+      await db
+        .update(users)
+        .set({ lastLoginAt: now, updatedAt: now })
+        .where(eq(users.id, user.id))
+    } catch {
+      // не блокируем вход при ошибке записи last_login_at
+    }
+
     const accessPayload: Pick<AccessTokenPayload, "userId" | "email" | "role"> = {
       userId: user.id,
       email: user.email,

@@ -38,6 +38,7 @@ export const users = pgTable("users", {
   role: userRoleEnum("role").notNull().default("employee"),
   departmentId: uuid("department_id").references((): AnyPgColumn => departments.id, { onDelete: "set null" }),
   isActive: boolean("is_active").notNull().default(true),
+  lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 })

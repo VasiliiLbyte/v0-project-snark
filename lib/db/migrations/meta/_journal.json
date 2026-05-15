@@ -71,6 +71,13 @@
       "when": 1778744685579,
       "tag": "0009_blushing_daredevil",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1778756757603,
+      "tag": "0010_users_last_login_at",
+      "breakpoints": true
     }
   ]
 }

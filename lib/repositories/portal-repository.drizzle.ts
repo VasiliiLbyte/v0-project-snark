@@ -1,5 +1,5 @@
 import "server-only"
-import { and, asc, count, desc, eq, gte, ilike, isNotNull, lt, or, sql } from "drizzle-orm"
+import { and, asc, count, desc, eq, gte, ilike, isNotNull, lt, ne, or, sql } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import { db } from "@/lib/db/client"
 import {
@@ -14,6 +14,7 @@ import {
   vacations,
 } from "@/lib/db/schema"
 import { hashPassword } from "@/lib/auth/password"
+import { revokeAllRefreshTokensForUser } from "@/lib/auth/session"
 import { mapContactsData, mapDocumentsData, mapProfileData } from "@/lib/mappers/portal"
 import { mockPortalRepository } from "@/lib/repositories/portal-repository.mock"
 import type { PortalRepository } from "@/lib/repositories/portal-repository.types"
@@ -24,6 +25,9 @@ import type {
   AdminEmployeeItem,
   AdminEmployeeUpsertPayload,
   AdminEmployeesResponse,
+  AdminPortalUserCreatePayload,
+  AdminPortalUserItem,
+  AdminPortalUsersResponse,
   AdminVacationItem,
   BirthdayPerson,
   BirthdaysData,
@@ -308,6 +312,54 @@ function ageNow(birthDate: Date, today: Date): number {
   return Math.max(age, 0)
 }
 
+type AdminPortalUserRow = {
+  id: string
+  email: string
+  firstName: string
+  lastName: string
+  role: UserRole
+  isActive: boolean
+  createdAt: Date
+  lastLoginAt: Date | null
+  departmentName: string | null
+}
+
+function mapAdminPortalUserRow(row: AdminPortalUserRow): AdminPortalUserItem {
+  return {
+    id: row.id,
+    email: row.email,
+    firstName: row.firstName,
+    lastName: row.lastName,
+    role: row.role,
+    isActive: row.isActive,
+    departmentName: row.departmentName,
+    createdAt: row.createdAt.toISOString(),
+    lastLoginAt: row.lastLoginAt ? row.lastLoginAt.toISOString() : null,
+  }
+}
+
+async function selectAdminPortalUserById(id: string): Promise<AdminPortalUserItem | null> {
+  const [row] = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      role: users.role,
+      isActive: users.isActive,
+      createdAt: users.createdAt,
+      lastLoginAt: users.lastLoginAt,
+      departmentName: departments.name,
+    })
+    .from(users)
+    .leftJoin(departments, eq(users.departmentId, departments.id))
+    .where(eq(users.id, id))
+    .limit(1)
+
+  if (!row) return null
+  return mapAdminPortalUserRow(row as AdminPortalUserRow)
+}
+
 export const drizzlePortalRepository: PortalRepository = {
   async getBirthdays(): Promise<BirthdaysData> {
     const today = new Date()
@@ -432,10 +484,22 @@ export const drizzlePortalRepository: PortalRepository = {
       .orderBy(desc(news.isPinned), desc(news.publishedAt), desc(news.createdAt))
       .limit(5)
 
-    const fallback = await mockPortalRepository.getDashboardData()
+    const fallback = await mockPortalRepository.getDashboardData(userId)
+
+    let welcomeName = fallback.welcomeName
+    if (userId) {
+      const [user] = await db
+        .select({ firstName: users.firstName })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1)
+      const name = user?.firstName?.trim()
+      if (name) welcomeName = name
+    }
 
     return {
       ...fallback,
+      welcomeName,
       birthdays,
       newEmployees,
       recentNews: recentNewsRows.map((row) => ({
@@ -2193,6 +2257,189 @@ export const drizzlePortalRepository: PortalRepository = {
 
     await db.delete(departments).where(eq(departments.id, id))
   },
+
+  async listAdminPortalUsers(): Promise<AdminPortalUsersResponse> {
+    const rows = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        role: users.role,
+        isActive: users.isActive,
+        createdAt: users.createdAt,
+        lastLoginAt: users.lastLoginAt,
+        departmentName: departments.name,
+      })
+      .from(users)
+      .leftJoin(departments, eq(users.departmentId, departments.id))
+      .orderBy(asc(users.lastName), asc(users.firstName))
+
+    return {
+      items: rows.map((row) => mapAdminPortalUserRow(row as AdminPortalUserRow)),
+    }
+  },
+
+  async getAdminPortalUserById(id: string): Promise<AdminPortalUserItem | null> {
+    return selectAdminPortalUserById(id)
+  },
+
+  async createAdminPortalUser(payload: AdminPortalUserCreatePayload): Promise<AdminPortalUserItem> {
+    const email = payload.email.trim().toLowerCase()
+    const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1)
+    if (existing) {
+      throw new PortalUserMutationError("Пользователь с таким email уже существует", "CONFLICT", 409)
+    }
+
+    if (payload.departmentId) {
+      const [dept] = await db
+        .select({ id: departments.id })
+        .from(departments)
+        .where(eq(departments.id, payload.departmentId))
+        .limit(1)
+      if (!dept) {
+        throw new PortalUserMutationError("Подразделение не найдено", "NOT_FOUND", 404)
+      }
+    }
+
+    const passwordHash = await hashPassword(payload.password)
+    const now = new Date()
+    const [created] = await db
+      .insert(users)
+      .values({
+        email,
+        passwordHash,
+        firstName: payload.firstName.trim(),
+        lastName: payload.lastName.trim(),
+        role: payload.role,
+        departmentId: payload.departmentId ?? null,
+        isActive: true,
+        updatedAt: now,
+      })
+      .returning({ id: users.id })
+
+    if (!created) {
+      throw new PortalUserMutationError("Не удалось создать пользователя", "INTERNAL_ERROR", 500)
+    }
+
+    await db.insert(employeeProfiles).values({
+      userId: created.id,
+      presence: "office",
+      updatedAt: now,
+    })
+
+    const item = await selectAdminPortalUserById(created.id)
+    if (!item) {
+      throw new PortalUserMutationError("Не удалось загрузить созданного пользователя", "INTERNAL_ERROR", 500)
+    }
+    return item
+  },
+
+  async updateAdminPortalUserRole(id: string, role: UserRole): Promise<AdminPortalUserItem> {
+    const current = await selectAdminPortalUserById(id)
+    if (!current) {
+      throw new PortalUserMutationError("Пользователь не найден", "NOT_FOUND", 404)
+    }
+
+    const now = new Date()
+    await db.update(users).set({ role, updatedAt: now }).where(eq(users.id, id))
+
+    const next = await selectAdminPortalUserById(id)
+    if (!next) {
+      throw new PortalUserMutationError("Пользователь не найден", "NOT_FOUND", 404)
+    }
+    return next
+  },
+
+  async updateAdminPortalUserCredentials(
+    id: string,
+    payload: { email?: string; password?: string }
+  ): Promise<AdminPortalUserItem> {
+    const current = await selectAdminPortalUserById(id)
+    if (!current) {
+      throw new PortalUserMutationError("Пользователь не найден", "NOT_FOUND", 404)
+    }
+
+    const updates: {
+      email?: string
+      passwordHash?: string
+      updatedAt: Date
+    } = { updatedAt: new Date() }
+    let shouldRevokeSessions = false
+
+    if (payload.email !== undefined && payload.email.length > 0) {
+      const nextEmail = payload.email.trim().toLowerCase()
+      if (nextEmail !== current.email) {
+        const [dup] = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(and(eq(users.email, nextEmail), ne(users.id, id)))
+          .limit(1)
+        if (dup) {
+          throw new PortalUserMutationError("Пользователь с таким email уже существует", "CONFLICT", 409)
+        }
+        updates.email = nextEmail
+        shouldRevokeSessions = true
+      }
+    }
+
+    if (payload.password !== undefined && payload.password.length > 0) {
+      updates.passwordHash = await hashPassword(payload.password)
+      shouldRevokeSessions = true
+    }
+
+    if (Object.keys(updates).length === 1) {
+      return current
+    }
+
+    await db.update(users).set(updates).where(eq(users.id, id))
+
+    if (shouldRevokeSessions) {
+      await revokeAllRefreshTokensForUser(id)
+    }
+
+    const next = await selectAdminPortalUserById(id)
+    if (!next) {
+      throw new PortalUserMutationError("Пользователь не найден", "NOT_FOUND", 404)
+    }
+    return next
+  },
+
+  async updateAdminPortalUserStatus(id: string, isActive: boolean): Promise<AdminPortalUserItem> {
+    const current = await selectAdminPortalUserById(id)
+    if (!current) {
+      throw new PortalUserMutationError("Пользователь не найден", "NOT_FOUND", 404)
+    }
+
+    const now = new Date()
+    await db.update(users).set({ isActive, updatedAt: now }).where(eq(users.id, id))
+
+    const next = await selectAdminPortalUserById(id)
+    if (!next) {
+      throw new PortalUserMutationError("Пользователь не найден", "NOT_FOUND", 404)
+    }
+    return next
+  },
+
+  async deleteAdminPortalUser(id: string): Promise<void> {
+    const current = await selectAdminPortalUserById(id)
+    if (!current) {
+      throw new PortalUserMutationError("Пользователь не найден", "NOT_FOUND", 404)
+    }
+    await db.delete(users).where(eq(users.id, id))
+  },
+}
+
+export class PortalUserMutationError extends Error {
+  status: number
+  code: string
+
+  constructor(message: string, code = "INVALID_PAYLOAD", status = 400) {
+    super(message)
+    this.name = "PortalUserMutationError"
+    this.code = code
+    this.status = status
+  }
 }
 
 export class DepartmentMutationError extends Error {

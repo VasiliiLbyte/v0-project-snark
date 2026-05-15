@@ -1,14 +1,21 @@
 import Link from "next/link"
-import { Card } from "@/components/ui/card"
+import { headers } from "next/headers"
 import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
 
-export default function AdminPage() {
+export const dynamic = "force-dynamic"
+
+export default async function AdminPage() {
+  const h = await headers()
+  const isAdmin = h.get("x-user-role") === "admin"
+
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <Card className="p-6">
         <h1 className="text-2xl font-bold text-card-foreground">Панель администратора</h1>
         <p className="mt-3 text-muted-foreground">
-          Раздел доступен только пользователям с ролью admin или hr_manager.
+          Раздел доступен только пользователям с ролью admin или hr_manager. Управление учётными записями — только
+          для администраторов.
         </p>
       </Card>
 
@@ -84,6 +91,20 @@ export default function AdminPage() {
             </Link>
           </div>
         </Card>
+
+        {isAdmin ? (
+          <Card className="p-6">
+            <h2 className="text-lg font-semibold text-card-foreground">Пользователи</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Управление учётными записями: роли, логины, пароли.
+            </p>
+            <div className="mt-4">
+              <Link href="/admin/users">
+                <Button className="bg-[#16223b] hover:bg-[#16223b]/90">Открыть раздел</Button>
+              </Link>
+            </div>
+          </Card>
+        ) : null}
       </div>
     </div>
   )

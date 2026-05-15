@@ -437,6 +437,72 @@ export const adminEmployeeHideSchema = z.object({
   hidden: z.boolean(),
 })
 
+const portalUserRoleSchema = z.enum(["admin", "hr_manager", "employee"])
+
+const portalUserPasswordSchema = z.string().min(6, "Пароль не короче 6 символов")
+
+export const adminPortalUserItemSchema = z.object({
+  id: z.string().uuid(),
+  email: z.string().email(),
+  firstName: z.string(),
+  lastName: z.string(),
+  role: portalUserRoleSchema,
+  isActive: z.boolean(),
+  departmentName: z.string().nullable(),
+  createdAt: z.string(),
+  lastLoginAt: z.string().nullable(),
+})
+
+export const adminPortalUsersResponseSchema = z.object({
+  items: z.array(adminPortalUserItemSchema),
+})
+
+export const adminPortalUserSingleResponseSchema = z.object({
+  item: adminPortalUserItemSchema,
+})
+
+export const adminPortalUserCreateSchema = z.object({
+  email: z.string().trim().toLowerCase().email(),
+  password: portalUserPasswordSchema,
+  firstName: z.string().trim().min(1).max(100),
+  lastName: z.string().trim().min(1).max(100),
+  role: portalUserRoleSchema,
+  departmentId: z.string().uuid().optional().nullable(),
+})
+
+export const adminPortalUserRoleUpdateSchema = z.object({
+  role: portalUserRoleSchema,
+})
+
+export const adminPortalUserCredentialsSchema = z
+  .object({
+    email: z.union([z.literal(""), z.string().trim().toLowerCase().email()]).optional(),
+    password: z.string().optional(),
+  })
+  .superRefine((val, ctx) => {
+    const emailVal = val.email
+    const hasEmail = typeof emailVal === "string" && emailVal.length > 0
+    const pwd = val.password
+    const hasPassword = pwd !== undefined && pwd.length > 0
+    if (!hasEmail && !hasPassword) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Укажите новый email или пароль",
+      })
+    }
+    if (hasPassword && pwd!.length < 6) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Пароль не короче 6 символов",
+        path: ["password"],
+      })
+    }
+  })
+
+export const adminPortalUserStatusSchema = z.object({
+  isActive: z.boolean(),
+})
+
 export const employeeImportErrorSchema = z.object({
   row: z.number().int().min(1),
   reason: z.string(),

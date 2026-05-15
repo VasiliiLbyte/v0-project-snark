@@ -5,6 +5,9 @@ import type {
   AdminEmployeeItem,
   AdminEmployeeUpsertPayload,
   AdminEmployeesResponse,
+  AdminPortalUserCreatePayload,
+  AdminPortalUserItem,
+  AdminPortalUsersResponse,
   AdminVacationItem,
   BirthdaysData,
   CalendarEvent,
@@ -49,7 +52,7 @@ import type {
 import type { UserRole } from "@/types/auth"
 
 export interface PortalRepository {
-  getDashboardData(): Promise<DashboardData>
+  getDashboardData(userId?: string): Promise<DashboardData>
   getBirthdays(): Promise<BirthdaysData>
   getNewEmployees(): Promise<NewEmployeeItem[]>
   getContactsData(query?: EmployeesQuery): Promise<ContactsData>
@@ -80,6 +83,16 @@ export interface PortalRepository {
   hideAdminEmployee(id: string, hidden: boolean): Promise<AdminEmployeeItem>
   deleteAdminEmployee(id: string): Promise<void>
   importEmployees(rows: AdminEmployeeUpsertPayload[]): Promise<EmployeeImportResult>
+  listAdminPortalUsers(): Promise<AdminPortalUsersResponse>
+  getAdminPortalUserById(id: string): Promise<AdminPortalUserItem | null>
+  createAdminPortalUser(payload: AdminPortalUserCreatePayload): Promise<AdminPortalUserItem>
+  updateAdminPortalUserRole(id: string, role: UserRole): Promise<AdminPortalUserItem>
+  updateAdminPortalUserCredentials(
+    id: string,
+    payload: { email?: string; password?: string }
+  ): Promise<AdminPortalUserItem>
+  updateAdminPortalUserStatus(id: string, isActive: boolean): Promise<AdminPortalUserItem>
+  deleteAdminPortalUser(id: string): Promise<void>
   getNewsList(query?: NewsListQuery, includeDrafts?: boolean): Promise<NewsListResponse>
   getNewsById(id: string, includeDrafts?: boolean): Promise<NewsDetailResponse>
   createNews(payload: NewsEditorPayload & { authorId: string }): Promise<NewsDetailResponse["item"]>

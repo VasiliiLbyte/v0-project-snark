@@ -12,6 +12,9 @@ import type {
   AdminDepartmentsResponse,
   AdminEmployeeItem,
   AdminEmployeeUpsertPayload,
+  AdminPortalUserCreatePayload,
+  AdminPortalUserItem,
+  AdminPortalUsersResponse,
   AdminVacationItem,
   BirthdaysData,
   CalendarEvent,
@@ -321,11 +324,41 @@ const mockNewsItems: NewsListResponse["items"] = [
   },
 ]
 
+const mockPortalUsers: AdminPortalUserItem[] = [
+  {
+    id: "f1111111-1111-4111-a111-111111111101",
+    email: "i.petrov@snark.ru",
+    firstName: "Иван",
+    lastName: "Петров",
+    role: "employee",
+    isActive: true,
+    departmentName: "СНАРК | Инжиниринг",
+    createdAt: "2026-01-15T10:00:00.000Z",
+    lastLoginAt: "2026-05-01T08:30:00.000Z",
+  },
+  {
+    id: "a0000001-0000-0000-0000-000000000099",
+    email: "admin@snark.local",
+    firstName: "Алексей",
+    lastName: "Смирнов",
+    role: "admin",
+    isActive: true,
+    departmentName: null,
+    createdAt: "2026-01-01T09:00:00.000Z",
+    lastLoginAt: null,
+  },
+]
+
 export const mockPortalRepository: PortalRepository = {
-  async getDashboardData() {
+  async getDashboardData(userId?: string) {
     await delay()
+    let welcomeName = "Иван"
+    if (userId) {
+      const profile = await this.getProfileData(userId)
+      welcomeName = profile.firstName?.trim() || profile.fullName.split(" ")[0] || welcomeName
+    }
     return mapDashboardData({
-      welcomeName: "Иван",
+      welcomeName,
       quickActions: [
         { label: "Создать заявку в ИТ", icon: "HelpCircle", href: "/support" },
         { label: "Забронировать переговорную", icon: "DoorOpen", href: "/booking" },
@@ -1387,6 +1420,124 @@ export const mockPortalRepository: PortalRepository = {
     }
     const index = mockDepartments.findIndex((d) => d.id === id)
     if (index !== -1) mockDepartments.splice(index, 1)
+  },
+
+  async listAdminPortalUsers(): Promise<AdminPortalUsersResponse> {
+    await delay()
+    return { items: mockPortalUsers.map((u) => ({ ...u })) }
+  },
+
+  async getAdminPortalUserById(id: string): Promise<AdminPortalUserItem | null> {
+    await delay()
+    const item = mockPortalUsers.find((u) => u.id === id)
+    return item ? { ...item } : null
+  },
+
+  async createAdminPortalUser(payload: AdminPortalUserCreatePayload): Promise<AdminPortalUserItem> {
+    await delay()
+    const email = payload.email.trim().toLowerCase()
+    if (mockPortalUsers.some((u) => u.email.toLowerCase() === email)) {
+      const err = new Error("Пользователь с таким email уже существует") as Error & {
+        status: number
+        code: string
+      }
+      err.status = 409
+      err.code = "CONFLICT"
+      throw err
+    }
+    const id =
+      typeof globalThis.crypto?.randomUUID === "function"
+        ? globalThis.crypto.randomUUID()
+        : `mock-user-${Date.now()}`
+    const deptName = payload.departmentId
+      ? mockDepartments.find((d) => d.id === payload.departmentId)?.name ?? null
+      : null
+    const now = new Date().toISOString()
+    const item: AdminPortalUserItem = {
+      id,
+      email,
+      firstName: payload.firstName.trim(),
+      lastName: payload.lastName.trim(),
+      role: payload.role,
+      isActive: true,
+      departmentName: deptName,
+      createdAt: now,
+      lastLoginAt: null,
+    }
+    mockPortalUsers.push(item)
+    return { ...item }
+  },
+
+  async updateAdminPortalUserRole(id: string, role: UserRole): Promise<AdminPortalUserItem> {
+    await delay()
+    const index = mockPortalUsers.findIndex((u) => u.id === id)
+    if (index === -1) {
+      const err = new Error("Пользователь не найден") as Error & { status: number; code: string }
+      err.status = 404
+      err.code = "NOT_FOUND"
+      throw err
+    }
+    mockPortalUsers[index] = { ...mockPortalUsers[index], role }
+    return { ...mockPortalUsers[index] }
+  },
+
+  async updateAdminPortalUserCredentials(
+    id: string,
+    payload: { email?: string; password?: string }
+  ): Promise<AdminPortalUserItem> {
+    await delay()
+    const index = mockPortalUsers.findIndex((u) => u.id === id)
+    if (index === -1) {
+      const err = new Error("Пользователь не найден") as Error & { status: number; code: string }
+      err.status = 404
+      err.code = "NOT_FOUND"
+      throw err
+    }
+    const current = mockPortalUsers[index]
+    if (payload.email !== undefined && payload.email.length > 0) {
+      const nextEmail = payload.email.trim().toLowerCase()
+      if (nextEmail !== current.email && mockPortalUsers.some((u) => u.email.toLowerCase() === nextEmail)) {
+        const err = new Error("Пользователь с таким email уже существует") as Error & {
+          status: number
+          code: string
+        }
+        err.status = 409
+        err.code = "CONFLICT"
+        throw err
+      }
+      if (nextEmail !== current.email) {
+        mockPortalUsers[index] = { ...current, email: nextEmail }
+      }
+    }
+    if (payload.password !== undefined && payload.password.length > 0) {
+      mockPortalUsers[index] = { ...mockPortalUsers[index] }
+    }
+    return { ...mockPortalUsers[index] }
+  },
+
+  async updateAdminPortalUserStatus(id: string, isActive: boolean): Promise<AdminPortalUserItem> {
+    await delay()
+    const index = mockPortalUsers.findIndex((u) => u.id === id)
+    if (index === -1) {
+      const err = new Error("Пользователь не найден") as Error & { status: number; code: string }
+      err.status = 404
+      err.code = "NOT_FOUND"
+      throw err
+    }
+    mockPortalUsers[index] = { ...mockPortalUsers[index], isActive }
+    return { ...mockPortalUsers[index] }
+  },
+
+  async deleteAdminPortalUser(id: string): Promise<void> {
+    await delay()
+    const index = mockPortalUsers.findIndex((u) => u.id === id)
+    if (index === -1) {
+      const err = new Error("Пользователь не найден") as Error & { status: number; code: string }
+      err.status = 404
+      err.code = "NOT_FOUND"
+      throw err
+    }
+    mockPortalUsers.splice(index, 1)
   },
 }
 

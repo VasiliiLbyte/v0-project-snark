@@ -29,8 +29,8 @@ import type {
   VacationStatus,
 } from "@/types/portal"
 
-export async function loadDashboardData(): Promise<DashboardData> {
-  return getPortalRepositoryServer().getDashboardData()
+export async function loadDashboardData(userId?: string): Promise<DashboardData> {
+  return getPortalRepositoryServer().getDashboardData(userId)
 }
 
 export async function loadBirthdaysData(): Promise<BirthdaysData> {
