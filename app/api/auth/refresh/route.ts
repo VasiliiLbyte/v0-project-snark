@@ -11,7 +11,13 @@ import {
   verifyToken,
   type RefreshTokenPayload,
 } from "@/lib/auth/tokens"
-import { getRefreshTokenExpiryDate, rotateSession, validateSession } from "@/lib/auth/session"
+import { useMockAuth } from "@/lib/auth/mock-mode"
+import {
+  getRefreshTokenExpiryDate,
+  mockRotateSession,
+  mockValidateSession,
+} from "@/lib/auth/mock-session"
+import { getRefreshTokenExpiryDate as dbRefreshExpiry, rotateSession, validateSession } from "@/lib/auth/session"
 
 function unauthorizedResponse() {
   const response = NextResponse.json({ error: "Сессия недействительна" }, { status: 401 })
@@ -39,7 +45,9 @@ export async function POST(request: Request) {
       return unauthorizedResponse()
     }
 
-    const session = await validateSession(refreshToken)
+    const session = useMockAuth()
+      ? await mockValidateSession(refreshToken)
+      : await validateSession(refreshToken)
     if (!session || session.user.id !== decodedRefresh.userId) {
       return unauthorizedResponse()
     }
@@ -52,13 +60,21 @@ export async function POST(request: Request) {
 
     const nextAccessToken = generateAccessToken(accessPayload)
     const nextRefreshToken = generateRefreshToken({ userId: session.user.id })
-    const nextRefreshExpiresAt = getRefreshTokenExpiryDate()
+    const nextRefreshExpiresAt = useMockAuth() ? getRefreshTokenExpiryDate() : dbRefreshExpiry()
 
-    await rotateSession({
-      sessionId: session.id,
-      refreshToken: nextRefreshToken,
-      expiresAt: nextRefreshExpiresAt,
-    })
+    if (useMockAuth()) {
+      await mockRotateSession({
+        sessionId: session.id,
+        refreshToken: nextRefreshToken,
+        expiresAt: nextRefreshExpiresAt,
+      })
+    } else {
+      await rotateSession({
+        sessionId: session.id,
+        refreshToken: nextRefreshToken,
+        expiresAt: nextRefreshExpiresAt,
+      })
+    }
 
     const response = NextResponse.json({
       accessToken: nextAccessToken,

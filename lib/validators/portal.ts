@@ -933,6 +933,9 @@ export const taskCreateSchema = z.object({
   assigneeId: z.string().uuid().optional().nullable(),
   departmentId: z.string().uuid().optional().nullable(),
   dueDate: z.string().optional().nullable(),
+  watcherIds: z.array(z.string().uuid()).optional(),
+  sourceMessageId: z.string().uuid().optional().nullable(),
+  sourceChannelId: z.string().uuid().optional().nullable(),
 })
 
 export const taskUpdateSchema = z.object({
@@ -943,6 +946,17 @@ export const taskUpdateSchema = z.object({
   assigneeId: z.string().uuid().optional().nullable(),
   departmentId: z.string().uuid().optional().nullable(),
   dueDate: z.string().optional().nullable(),
+  isImportant: z.boolean().optional(),
+  completionResult: z.string().trim().max(10000).optional().nullable(),
+})
+
+export const taskCompleteSchema = z.object({
+  completionResult: z.string().trim().min(1).max(10000),
+})
+
+export const taskParticipantPayloadSchema = z.object({
+  userId: z.string().uuid(),
+  role: z.enum(["co_assignee", "watcher"]),
 })
 
 export const portalTaskSchema = z.object({
@@ -959,9 +973,89 @@ export const portalTaskSchema = z.object({
   departmentName: z.string().nullable(),
   dueDate: z.string().nullable(),
   protocolActionItemId: z.number().int().nullable(),
+  sourceMessageId: z.string().uuid().nullable().optional(),
+  sourceChannelId: z.string().uuid().nullable().optional(),
+  chatChannelId: z.string().uuid().nullable().optional(),
+  isImportant: z.boolean(),
+  completionResult: z.string().nullable(),
   completedAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
+})
+
+export const taskChecklistItemSchema = z.object({
+  id: z.string().uuid(),
+  taskId: z.string().uuid(),
+  title: z.string(),
+  isDone: z.boolean(),
+  assigneeId: z.string().uuid().nullable(),
+  assigneeName: z.string().nullable(),
+  sortOrder: z.number().int(),
+  completedAt: z.string().nullable(),
+  createdAt: z.string(),
+})
+
+export const taskCommentSchema = z.object({
+  id: z.string().uuid(),
+  taskId: z.string().uuid(),
+  authorId: z.string().uuid(),
+  authorName: z.string(),
+  body: z.string(),
+  createdAt: z.string(),
+})
+
+export const taskParticipantSchema = z.object({
+  id: z.string().uuid(),
+  taskId: z.string().uuid(),
+  userId: z.string().uuid(),
+  userName: z.string(),
+  role: z.enum(["co_assignee", "watcher"]),
+  createdAt: z.string(),
+})
+
+export const taskAttachmentSchema = z.object({
+  id: z.string().uuid(),
+  taskId: z.string().uuid(),
+  fileName: z.string(),
+  fileUrl: z.string(),
+  mimeType: z.string().nullable(),
+  sizeBytes: z.number().int().nullable(),
+  attachmentType: z.enum(["general", "completion"]),
+  uploadedBy: z.string().uuid().nullable(),
+  uploaderName: z.string().nullable(),
+  createdAt: z.string(),
+})
+
+export const taskDetailSchema = portalTaskSchema.extend({
+  checklist: z.array(taskChecklistItemSchema),
+  comments: z.array(taskCommentSchema),
+  participants: z.array(taskParticipantSchema),
+  attachments: z.array(taskAttachmentSchema),
+})
+
+export const taskChecklistCreateSchema = z.object({
+  title: z.string().trim().min(1).max(500),
+  assigneeId: z.string().uuid().optional().nullable(),
+})
+
+export const taskChecklistUpdateSchema = z.object({
+  title: z.string().trim().min(1).max(500).optional(),
+  isDone: z.boolean().optional(),
+  assigneeId: z.string().uuid().optional().nullable(),
+})
+
+export const taskCommentCreateSchema = z.object({
+  body: z.string().trim().min(1).max(5000),
+})
+
+export const taskFromMessageSchema = z.object({
+  title: z.string().trim().min(1).max(500),
+  description: z.string().trim().max(5000).optional().nullable(),
+  assigneeId: z.string().uuid().optional().nullable(),
+  priority: taskPriorityEnum.optional(),
+  dueDate: z.string().optional().nullable(),
+  sourceMessageId: z.string().uuid(),
+  sourceChannelId: z.string().uuid(),
 })
 
 export const tasksListResponseSchema = z.object({
@@ -972,10 +1066,10 @@ export const tasksListResponseSchema = z.object({
 })
 
 export const taskDetailResponseSchema = z.object({
-  item: portalTaskSchema.nullable(),
+  item: taskDetailSchema.nullable(),
 })
 
-export const chatChannelTypeEnum = z.enum(["direct", "group", "department"])
+export const chatChannelTypeEnum = z.enum(["direct", "group", "department", "task"])
 
 export const chatChannelCreateSchema = z.object({
   type: chatChannelTypeEnum,
@@ -986,6 +1080,7 @@ export const chatChannelCreateSchema = z.object({
 
 export const chatMessageCreateSchema = z.object({
   body: z.string().trim().min(1).max(10000),
+  replyToId: z.string().uuid().optional().nullable(),
 })
 
 export const chatMessageSchema = z.object({
@@ -994,6 +1089,10 @@ export const chatMessageSchema = z.object({
   authorId: z.string().uuid(),
   authorName: z.string(),
   body: z.string(),
+  messageType: z.enum(["user", "system", "task_created"]).default("user"),
+  replyToId: z.string().uuid().nullable().optional(),
+  replyToBody: z.string().nullable().optional(),
+  linkedTaskId: z.string().uuid().nullable().optional(),
   createdAt: z.string(),
   editedAt: z.string().nullable(),
 })
@@ -1002,6 +1101,7 @@ export const chatChannelSchema = z.object({
   id: z.string().uuid(),
   name: z.string().nullable(),
   type: chatChannelTypeEnum,
+  taskId: z.string().uuid().nullable().optional(),
   departmentId: z.string().uuid().nullable(),
   createdBy: z.string().uuid().nullable(),
   memberCount: z.number().int().min(0),

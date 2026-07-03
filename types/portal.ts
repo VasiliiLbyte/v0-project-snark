@@ -773,9 +773,70 @@ export interface PortalTask {
   departmentName: string | null
   dueDate: string | null
   protocolActionItemId: number | null
+  sourceMessageId: string | null
+  sourceChannelId: string | null
+  chatChannelId: string | null
+  isImportant: boolean
+  completionResult: string | null
   completedAt: string | null
   createdAt: string
   updatedAt: string
+}
+
+export type TaskParticipantRole = "co_assignee" | "watcher"
+
+export interface TaskParticipant {
+  id: string
+  taskId: string
+  userId: string
+  userName: string
+  role: TaskParticipantRole
+  createdAt: string
+}
+
+export interface TaskChecklistItem {
+  id: string
+  taskId: string
+  title: string
+  isDone: boolean
+  assigneeId: string | null
+  assigneeName: string | null
+  sortOrder: number
+  completedAt: string | null
+  createdAt: string
+}
+
+export interface TaskComment {
+  id: string
+  taskId: string
+  authorId: string
+  authorName: string
+  body: string
+  createdAt: string
+}
+
+export interface TaskAttachment {
+  id: string
+  taskId: string
+  fileName: string
+  fileUrl: string
+  mimeType: string | null
+  sizeBytes: number | null
+  attachmentType: "general" | "completion"
+  uploadedBy: string | null
+  uploaderName: string | null
+  createdAt: string
+}
+
+export interface TaskDetail extends PortalTask {
+  checklist: TaskChecklistItem[]
+  comments: TaskComment[]
+  participants: TaskParticipant[]
+  attachments: TaskAttachment[]
+}
+
+export interface TaskDetailResponse {
+  item: TaskDetail | null
 }
 
 export interface TasksQuery {
@@ -792,10 +853,6 @@ export interface TasksListResponse {
   limit: number
 }
 
-export interface TaskDetailResponse {
-  item: PortalTask | null
-}
-
 export interface TaskCreatePayload {
   title: string
   description?: string | null
@@ -803,6 +860,9 @@ export interface TaskCreatePayload {
   assigneeId?: string | null
   departmentId?: string | null
   dueDate?: string | null
+  watcherIds?: string[]
+  sourceMessageId?: string | null
+  sourceChannelId?: string | null
 }
 
 export interface TaskUpdatePayload {
@@ -813,14 +873,28 @@ export interface TaskUpdatePayload {
   assigneeId?: string | null
   departmentId?: string | null
   dueDate?: string | null
+  isImportant?: boolean
+  completionResult?: string | null
 }
 
-export type ChatChannelType = "direct" | "group" | "department"
+export interface TaskCompletePayload {
+  completionResult: string
+}
+
+export interface TaskParticipantPayload {
+  userId: string
+  role: TaskParticipantRole
+}
+
+export type ChatChannelType = "direct" | "group" | "department" | "task"
+
+export type ChatMessageType = "user" | "system" | "task_created"
 
 export interface ChatChannel {
   id: string
   name: string | null
   type: ChatChannelType
+  taskId?: string | null
   departmentId: string | null
   createdBy: string | null
   memberCount: number
@@ -838,6 +912,10 @@ export interface ChatMessage {
   authorId: string
   authorName: string
   body: string
+  messageType: ChatMessageType
+  replyToId: string | null
+  replyToBody?: string | null
+  linkedTaskId?: string | null
   createdAt: string
   editedAt: string | null
 }
@@ -859,6 +937,32 @@ export interface ChatChannelCreatePayload {
 }
 
 export interface ChatMessageCreatePayload {
+  body: string
+  replyToId?: string | null
+}
+
+export interface TaskFromMessagePayload {
+  title: string
+  description?: string | null
+  assigneeId?: string | null
+  priority?: TaskPriority
+  dueDate?: string | null
+  sourceMessageId: string
+  sourceChannelId: string
+}
+
+export interface TaskChecklistCreatePayload {
+  title: string
+  assigneeId?: string | null
+}
+
+export interface TaskChecklistUpdatePayload {
+  title?: string
+  isDone?: boolean
+  assigneeId?: string | null
+}
+
+export interface TaskCommentCreatePayload {
   body: string
 }
 

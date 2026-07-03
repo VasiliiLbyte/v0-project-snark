@@ -44,7 +44,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
         { status: 400 }
       )
     }
-    const created = await sendMessage(id, auth.userId, parsed.data.body)
+    const created = await sendMessage(id, auth.userId, parsed.data.body, {
+      replyToId: parsed.data.replyToId,
+    })
     await writeAuditLog({
       userId: auth.userId,
       action: "user:chat:send-message",

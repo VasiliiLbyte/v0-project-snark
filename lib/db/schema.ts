@@ -3,6 +3,7 @@ import {
   boolean,
   date,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -238,9 +239,48 @@ export const tasks = pgTable("tasks", {
   }),
   dueDate: date("due_date"),
   protocolActionItemId: integer("protocol_action_item_id"),
+  sourceMessageId: uuid("source_message_id"),
+  sourceChannelId: uuid("source_channel_id"),
+  isImportant: boolean("is_important").notNull().default(false),
+  completionResult: text("completion_result"),
   completedAt: timestamp("completed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const taskParticipants = pgTable("task_participants", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  taskId: uuid("task_id")
+    .notNull()
+    .references(() => tasks.id, { onDelete: "cascade" }),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  role: text("role").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const taskChecklistItems = pgTable("task_checklist_items", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  taskId: uuid("task_id")
+    .notNull()
+    .references(() => tasks.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  isDone: boolean("is_done").notNull().default(false),
+  assigneeId: uuid("assignee_id").references((): AnyPgColumn => users.id, { onDelete: "set null" }),
+  sortOrder: integer("sort_order").notNull().default(0),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const taskLinks = pgTable("task_links", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  taskId: uuid("task_id")
+    .notNull()
+    .references(() => tasks.id, { onDelete: "cascade" }),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 })
 
 export const taskComments = pgTable("task_comments", {
@@ -255,12 +295,32 @@ export const taskComments = pgTable("task_comments", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 })
 
-export const chatChannelTypeEnum = pgEnum("chat_channel_type", ["direct", "group", "department"])
+export const taskAttachments = pgTable("task_attachments", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  taskId: uuid("task_id")
+    .notNull()
+    .references(() => tasks.id, { onDelete: "cascade" }),
+  fileName: text("file_name").notNull(),
+  fileUrl: text("file_url").notNull(),
+  mimeType: text("mime_type"),
+  sizeBytes: integer("size_bytes"),
+  attachmentType: text("attachment_type").notNull().default("general"),
+  uploadedBy: uuid("uploaded_by").references((): AnyPgColumn => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const chatChannelTypeEnum = pgEnum("chat_channel_type", [
+  "direct",
+  "group",
+  "department",
+  "task",
+])
 
 export const chatChannels = pgTable("chat_channels", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name"),
   type: chatChannelTypeEnum("type").notNull().default("direct"),
+  taskId: uuid("task_id").references((): AnyPgColumn => tasks.id, { onDelete: "cascade" }),
   departmentId: uuid("department_id").references((): AnyPgColumn => departments.id, {
     onDelete: "set null",
   }),
@@ -290,6 +350,11 @@ export const chatMessages = pgTable("chat_messages", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   body: text("body").notNull(),
+  messageType: text("message_type").notNull().default("user"),
+  replyToId: uuid("reply_to_id").references((): AnyPgColumn => chatMessages.id, {
+    onDelete: "set null",
+  }),
+  metadata: jsonb("metadata"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   editedAt: timestamp("edited_at", { withTimezone: true }),
 })

@@ -1,5 +1,8 @@
 import { eq } from "drizzle-orm"
 import { NextResponse } from "next/server"
+import { findDevUser } from "@/lib/auth/dev-users"
+import { useMockAuth } from "@/lib/auth/mock-mode"
+import { mockCreateSession } from "@/lib/auth/mock-session"
 import { verifyPassword } from "@/lib/auth/password"
 import { createSession, getRefreshTokenExpiryDate } from "@/lib/auth/session"
 import {
@@ -31,6 +34,42 @@ export async function POST(request: Request) {
     }
 
     const { email, password } = parsed.data
+
+    if (useMockAuth()) {
+      const devUser = findDevUser(email, password)
+      if (!devUser) {
+        return NextResponse.json({ error: INVALID_CREDENTIALS_MESSAGE }, { status: 401 })
+      }
+      if (!devUser.isActive) {
+        return NextResponse.json({ error: "Аккаунт деактивирован" }, { status: 403 })
+      }
+
+      const accessPayload: Pick<AccessTokenPayload, "userId" | "email" | "role"> = {
+        userId: devUser.id,
+        email: devUser.email,
+        role: devUser.role,
+      }
+      const accessToken = generateAccessToken(accessPayload)
+      const refreshToken = generateRefreshToken({ userId: devUser.id })
+      await mockCreateSession({ userId: devUser.id, refreshToken, expiresAt: getRefreshTokenExpiryDate() })
+
+      const response = NextResponse.json({
+        accessToken,
+        user: {
+          id: devUser.id,
+          email: devUser.email,
+          firstName: devUser.firstName,
+          lastName: devUser.lastName,
+          role: devUser.role,
+          departmentId: devUser.departmentId,
+          isActive: devUser.isActive,
+        },
+        role: devUser.role,
+      })
+      response.cookies.set(REFRESH_TOKEN_COOKIE, refreshToken, validateCookieConfig(REFRESH_TOKEN_TTL_SECONDS))
+      response.cookies.set(ACCESS_TOKEN_COOKIE, accessToken, validateCookieConfig(ACCESS_TOKEN_TTL_SECONDS))
+      return response
+    }
 
     const [user] = await db
       .select({

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, type AuthError } from "@/lib/auth/request-auth"
 import { writeAuditLog } from "@/lib/audit/log"
-import { getTaskById, updateTask } from "@/lib/repositories/tasks.repository"
+import { deleteTask, getTaskDetail, updateTask } from "@/lib/repositories/tasks.repository"
 import {
   apiErrorSchema,
   taskDetailResponseSchema,
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const auth = requireAuth(request)
     const { id } = await context.params
-    const item = await getTaskById(id, auth.userId, auth.role)
+    const item = await getTaskDetail(id, auth.userId, auth.role)
     return NextResponse.json(taskDetailResponseSchema.parse({ item }))
   } catch (error) {
     const known = error as Partial<AuthError>
@@ -60,6 +60,33 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       apiErrorSchema.parse({
         error: status === 500 ? message : (known.message ?? message),
         code: status === 404 ? "NOT_FOUND" : status === 500 ? "INTERNAL_ERROR" : (known.code ?? "AUTH_ERROR"),
+      }),
+      { status }
+    )
+  }
+}
+
+export async function DELETE(request: NextRequest, context: RouteContext) {
+  try {
+    const auth = requireAuth(request)
+    const { id } = await context.params
+    await deleteTask(id, auth.userId, auth.role)
+    await writeAuditLog({
+      userId: auth.userId,
+      action: "user:tasks:delete",
+      resourceType: "tasks",
+      resourceId: id,
+      statusCode: 200,
+    })
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    const known = error as Partial<AuthError>
+    const message = error instanceof Error ? error.message : "Не удалось удалить задачу"
+    const status = known.status ?? (message.includes("не найдена") ? 404 : message.includes("прав") ? 403 : 500)
+    return NextResponse.json(
+      apiErrorSchema.parse({
+        error: status === 500 ? message : (known.message ?? message),
+        code: status === 404 ? "NOT_FOUND" : status === 403 ? "FORBIDDEN" : status === 500 ? "INTERNAL_ERROR" : (known.code ?? "AUTH_ERROR"),
       }),
       { status }
     )

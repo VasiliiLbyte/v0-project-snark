@@ -9,13 +9,21 @@ import type {
   ChatChannelCreatePayload,
   ChatChannelsListResponse,
   ChatMessage,
+  ChatMessageType,
   ChatMessagesListResponse,
 } from "@/types/portal"
+import {
+  mockAddChannelMembers,
+  mockCreateChannel,
+  mockFindOrCreateDirectChannel,
+  mockGetMessageById,
+  mockListChannelsForUser,
+  mockListMessages,
+  mockSendMessage,
+} from "@/lib/repositories/chat.mock-store"
 
 const author = alias(users, "message_author")
-
-const mockChannels: ChatChannel[] = []
-const mockMessages: ChatMessage[] = []
+const replyMessage = alias(chatMessages, "reply_message")
 
 function useMockDb(): boolean {
   return process.env.USE_MOCK_DB !== "false"
@@ -28,27 +36,41 @@ function mapMessage(row: {
   authorFirstName: string
   authorLastName: string
   body: string
+  messageType?: string | null
+  replyToId?: string | null
+  replyToBody?: string | null
+  linkedTaskId?: string | null
   createdAt: Date
   editedAt: Date | null
 }): ChatMessage {
+  const metadataTaskId =
+    row.linkedTaskId ??
+    (typeof row.body === "string" && row.messageType === "system" ? undefined : undefined)
+
   return {
     id: row.id,
     channelId: row.channelId,
     authorId: row.authorId,
     authorName: formatFullName(row.authorLastName, row.authorFirstName),
     body: row.body,
+    messageType: (row.messageType ?? "user") as ChatMessageType,
+    replyToId: row.replyToId ?? null,
+    replyToBody: row.replyToBody ?? null,
+    linkedTaskId: metadataTaskId ?? null,
     createdAt: row.createdAt.toISOString(),
     editedAt: row.editedAt ? row.editedAt.toISOString() : null,
   }
 }
 
+function parseLinkedTaskId(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== "object") return null
+  const taskId = (metadata as { taskId?: unknown }).taskId
+  return typeof taskId === "string" ? taskId : null
+}
+
 export async function listMyChannels(userId: string): Promise<ChatChannelsListResponse> {
   if (useMockDb()) {
-    return {
-      items: mockChannels.filter((channel) =>
-        mockMessages.some((msg) => msg.channelId === channel.id)
-      ),
-    }
+    return { items: mockListChannelsForUser(userId) }
   }
 
   const memberships = await db
@@ -78,6 +100,9 @@ export async function listMyChannels(userId: string): Promise<ChatChannelsListRe
         authorFirstName: author.firstName,
         authorLastName: author.lastName,
         body: chatMessages.body,
+        messageType: chatMessages.messageType,
+        replyToId: chatMessages.replyToId,
+        metadata: chatMessages.metadata,
         createdAt: chatMessages.createdAt,
         editedAt: chatMessages.editedAt,
       })
@@ -93,19 +118,19 @@ export async function listMyChannels(userId: string): Promise<ChatChannelsListRe
       .where(eq(chatChannelMembers.channelId, channel.id))
 
     let unreadCount = 0
-    if (membership?.lastReadAt) {
-      const [unreadRow] = await db
-        .select({ value: sql<number>`count(*)::int` })
-        .from(chatMessages)
-        .where(
-          and(
-            eq(chatMessages.channelId, channel.id),
-            gt(chatMessages.createdAt, membership.lastReadAt),
-            sql`${chatMessages.authorId} <> ${userId}`
-          )
-        )
-      unreadCount = Number(unreadRow?.value ?? 0)
+    const lastReadAt = membership?.lastReadAt
+    const unreadConditions = [
+      eq(chatMessages.channelId, channel.id),
+      sql`${chatMessages.authorId} <> ${userId}`,
+    ]
+    if (lastReadAt) {
+      unreadConditions.push(gt(chatMessages.createdAt, lastReadAt))
     }
+    const [unreadRow] = await db
+      .select({ value: sql<number>`count(*)::int` })
+      .from(chatMessages)
+      .where(and(...unreadConditions))
+    unreadCount = Number(unreadRow?.value ?? 0)
 
     let peerId: string | null = null
     let peerName: string | null = null
@@ -133,11 +158,17 @@ export async function listMyChannels(userId: string): Promise<ChatChannelsListRe
       id: channel.id,
       name: channel.name,
       type: channel.type,
+      taskId: channel.taskId,
       departmentId: channel.departmentId,
       createdBy: channel.createdBy,
       memberCount: Number(memberCountRow?.value ?? 0),
       unreadCount,
-      lastMessage: lastMessageRow ? mapMessage(lastMessageRow) : null,
+      lastMessage: lastMessageRow
+        ? mapMessage({
+            ...lastMessageRow,
+            linkedTaskId: parseLinkedTaskId(lastMessageRow.metadata),
+          })
+        : null,
       peerId,
       peerName,
       createdAt: channel.createdAt.toISOString(),
@@ -156,9 +187,7 @@ export async function listChannelMessages(
   if (useMockDb()) {
     return {
       channelId,
-      items: mockMessages
-        .filter((message) => message.channelId === channelId)
-        .slice(-limit),
+      items: mockListMessages(channelId, userId, limit),
     }
   }
 
@@ -180,11 +209,16 @@ export async function listChannelMessages(
       authorFirstName: author.firstName,
       authorLastName: author.lastName,
       body: chatMessages.body,
+      messageType: chatMessages.messageType,
+      replyToId: chatMessages.replyToId,
+      replyToBody: replyMessage.body,
+      metadata: chatMessages.metadata,
       createdAt: chatMessages.createdAt,
       editedAt: chatMessages.editedAt,
     })
     .from(chatMessages)
     .innerJoin(author, eq(author.id, chatMessages.authorId))
+    .leftJoin(replyMessage, eq(replyMessage.id, chatMessages.replyToId))
     .where(eq(chatMessages.channelId, channelId))
     .orderBy(desc(chatMessages.createdAt))
     .limit(limit)
@@ -196,7 +230,22 @@ export async function listChannelMessages(
 
   return {
     channelId,
-    items: rows.reverse().map(mapMessage),
+    items: rows.reverse().map((row) =>
+      mapMessage({
+        id: row.id,
+        channelId: row.channelId,
+        authorId: row.authorId,
+        authorFirstName: row.authorFirstName,
+        authorLastName: row.authorLastName,
+        body: row.body,
+        messageType: row.messageType,
+        replyToId: row.replyToId,
+        replyToBody: row.replyToBody,
+        linkedTaskId: parseLinkedTaskId(row.metadata),
+        createdAt: row.createdAt,
+        editedAt: row.editedAt,
+      })
+    ),
   }
 }
 
@@ -206,20 +255,13 @@ export async function createChannel(
   const uniqueMembers = Array.from(new Set([payload.createdBy, ...payload.memberIds]))
 
   if (useMockDb()) {
-    const channel: ChatChannel = {
-      id: crypto.randomUUID(),
+    return mockCreateChannel({
       name: payload.name ?? null,
       type: payload.type,
       departmentId: payload.departmentId ?? null,
       createdBy: payload.createdBy,
-      memberCount: uniqueMembers.length,
-      unreadCount: 0,
-      lastMessage: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
-    mockChannels.unshift(channel)
-    return channel
+      memberIds: uniqueMembers.filter((id) => id !== payload.createdBy),
+    })
   }
 
   const [channel] = await db
@@ -236,6 +278,7 @@ export async function createChannel(
     uniqueMembers.map((memberId) => ({
       channelId: channel.id,
       userId: memberId,
+      lastReadAt: new Date(),
     }))
   )
 
@@ -243,6 +286,7 @@ export async function createChannel(
     id: channel.id,
     name: channel.name,
     type: channel.type,
+    taskId: channel.taskId,
     departmentId: channel.departmentId,
     createdBy: channel.createdBy,
     memberCount: uniqueMembers.length,
@@ -256,25 +300,11 @@ export async function createChannel(
 export async function sendMessage(
   channelId: string,
   userId: string,
-  body: string
+  body: string,
+  options?: { replyToId?: string | null; messageType?: ChatMessageType }
 ): Promise<ChatMessage> {
   if (useMockDb()) {
-    const message: ChatMessage = {
-      id: crypto.randomUUID(),
-      channelId,
-      authorId: userId,
-      authorName: "Вы",
-      body,
-      createdAt: new Date().toISOString(),
-      editedAt: null,
-    }
-    mockMessages.push(message)
-    const channel = mockChannels.find((item) => item.id === channelId)
-    if (channel) {
-      channel.lastMessage = message
-      channel.updatedAt = message.createdAt
-    }
-    return message
+    return mockSendMessage(channelId, userId, body, options)
   }
 
   const [membership] = await db
@@ -289,7 +319,13 @@ export async function sendMessage(
 
   const [inserted] = await db
     .insert(chatMessages)
-    .values({ channelId, authorId: userId, body })
+    .values({
+      channelId,
+      authorId: userId,
+      body,
+      messageType: options?.messageType ?? "user",
+      replyToId: options?.replyToId ?? null,
+    })
     .returning({ id: chatMessages.id })
 
   await db
@@ -310,6 +346,9 @@ export async function sendMessage(
       authorFirstName: author.firstName,
       authorLastName: author.lastName,
       body: chatMessages.body,
+      messageType: chatMessages.messageType,
+      replyToId: chatMessages.replyToId,
+      metadata: chatMessages.metadata,
       createdAt: chatMessages.createdAt,
       editedAt: chatMessages.editedAt,
     })
@@ -319,7 +358,41 @@ export async function sendMessage(
     .limit(1)
 
   if (!row) throw new Error("Не удалось отправить сообщение")
-  return mapMessage(row)
+  return mapMessage({
+    ...row,
+    linkedTaskId: parseLinkedTaskId(row.metadata),
+  })
+}
+
+export async function getMessageById(messageId: string): Promise<ChatMessage | null> {
+  if (useMockDb()) {
+    return mockGetMessageById(messageId)
+  }
+
+  const [row] = await db
+    .select({
+      id: chatMessages.id,
+      channelId: chatMessages.channelId,
+      authorId: chatMessages.authorId,
+      authorFirstName: author.firstName,
+      authorLastName: author.lastName,
+      body: chatMessages.body,
+      messageType: chatMessages.messageType,
+      replyToId: chatMessages.replyToId,
+      metadata: chatMessages.metadata,
+      createdAt: chatMessages.createdAt,
+      editedAt: chatMessages.editedAt,
+    })
+    .from(chatMessages)
+    .innerJoin(author, eq(author.id, chatMessages.authorId))
+    .where(eq(chatMessages.id, messageId))
+    .limit(1)
+
+  if (!row) return null
+  return mapMessage({
+    ...row,
+    linkedTaskId: parseLinkedTaskId(row.metadata),
+  })
 }
 
 export async function findOrCreateDirectChannel(
@@ -327,17 +400,7 @@ export async function findOrCreateDirectChannel(
   peerId: string
 ): Promise<ChatChannel> {
   if (useMockDb()) {
-    const existing = mockChannels.find(
-      (channel) =>
-        channel.type === "direct" &&
-        mockMessages.some((msg) => msg.channelId === channel.id)
-    )
-    if (existing) return existing
-    return createChannel({
-      type: "direct",
-      memberIds: [peerId],
-      createdBy: userId,
-    })
+    return mockFindOrCreateDirectChannel(userId, peerId)
   }
 
   const myMemberships = await db
@@ -375,4 +438,57 @@ export async function findOrCreateDirectChannel(
     const listed = await listMyChannels(userId)
     return listed.items.find((item) => item.id === created.id) ?? created
   })
+}
+
+export async function addChannelMembers(
+  channelId: string,
+  actorUserId: string,
+  memberIds: string[]
+): Promise<ChatChannel> {
+  const unique = Array.from(new Set(memberIds)).filter((id) => id !== actorUserId)
+  if (unique.length === 0) {
+    throw new Error("Укажите участников")
+  }
+
+  if (useMockDb()) {
+    const channel = mockAddChannelMembers(channelId, actorUserId, unique)
+    if (!channel) throw new Error("Нет доступа к каналу")
+    return channel
+  }
+
+  const [membership] = await db
+    .select({ id: chatChannelMembers.id })
+    .from(chatChannelMembers)
+    .where(and(eq(chatChannelMembers.channelId, channelId), eq(chatChannelMembers.userId, actorUserId)))
+    .limit(1)
+
+  if (!membership) throw new Error("Нет доступа к каналу")
+
+  const [channelRow] = await db.select().from(chatChannels).where(eq(chatChannels.id, channelId)).limit(1)
+  if (!channelRow) throw new Error("Канал не найден")
+  if (channelRow.type === "direct") throw new Error("Нельзя добавить участников в личный чат")
+
+  const existing = await db
+    .select({ userId: chatChannelMembers.userId })
+    .from(chatChannelMembers)
+    .where(eq(chatChannelMembers.channelId, channelId))
+  const existingIds = new Set(existing.map((row) => row.userId))
+  const toAdd = unique.filter((id) => !existingIds.has(id))
+
+  if (toAdd.length > 0) {
+    await db.insert(chatChannelMembers).values(
+      toAdd.map((userId) => ({
+        channelId,
+        userId,
+        lastReadAt: new Date(),
+      }))
+    )
+  }
+
+  await db.update(chatChannels).set({ updatedAt: new Date() }).where(eq(chatChannels.id, channelId))
+
+  const listed = await listMyChannels(actorUserId)
+  const found = listed.items.find((item) => item.id === channelId)
+  if (!found) throw new Error("Канал не найден")
+  return found
 }
