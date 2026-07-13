@@ -922,6 +922,20 @@ export const taskPriorityEnum = z.enum(["low", "medium", "high", "critical"])
 export const tasksListQuerySchema = z.object({
   status: z.enum(["new", "in_progress", "review", "done", "cancelled", "all"]).optional(),
   assigneeId: z.string().uuid().optional(),
+  creatorId: z.string().uuid().optional(),
+  departmentId: z.string().uuid().optional(),
+  priority: taskPriorityEnum.optional(),
+  scope: z.enum(["all", "mine", "created", "watching", "overdue", "important"]).optional(),
+  overdue: z
+    .union([z.literal("true"), z.literal("false"), z.boolean()])
+    .optional()
+    .transform((value) => value === true || value === "true"),
+  q: z.string().trim().max(200).optional(),
+  includeSubtasks: z
+    .union([z.literal("true"), z.literal("false"), z.boolean()])
+    .optional()
+    .transform((value) => value === true || value === "true"),
+  parentTaskId: z.string().uuid().optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 })
@@ -934,6 +948,7 @@ export const taskCreateSchema = z.object({
   departmentId: z.string().uuid().optional().nullable(),
   dueDate: z.string().optional().nullable(),
   watcherIds: z.array(z.string().uuid()).optional(),
+  parentTaskId: z.string().uuid().optional().nullable(),
   sourceMessageId: z.string().uuid().optional().nullable(),
   sourceChannelId: z.string().uuid().optional().nullable(),
 })
@@ -972,11 +987,14 @@ export const portalTaskSchema = z.object({
   departmentId: z.string().uuid().nullable(),
   departmentName: z.string().nullable(),
   dueDate: z.string().nullable(),
+  parentTaskId: z.string().uuid().nullable().optional(),
   protocolActionItemId: z.number().int().nullable(),
   sourceMessageId: z.string().uuid().nullable().optional(),
   sourceChannelId: z.string().uuid().nullable().optional(),
   chatChannelId: z.string().uuid().nullable().optional(),
   isImportant: z.boolean(),
+  isOverdue: z.boolean().optional(),
+  requiresAssignment: z.boolean().optional(),
   completionResult: z.string().nullable(),
   completedAt: z.string().nullable(),
   createdAt: z.string(),
@@ -1026,11 +1044,25 @@ export const taskAttachmentSchema = z.object({
   createdAt: z.string(),
 })
 
+export const taskActivityItemSchema = z.object({
+  id: z.string().uuid(),
+  taskId: z.string().uuid(),
+  actorId: z.string().uuid().nullable(),
+  actorName: z.string().nullable(),
+  action: z.string(),
+  field: z.string().nullable(),
+  oldValue: z.string().nullable(),
+  newValue: z.string().nullable(),
+  createdAt: z.string(),
+})
+
 export const taskDetailSchema = portalTaskSchema.extend({
   checklist: z.array(taskChecklistItemSchema),
   comments: z.array(taskCommentSchema),
   participants: z.array(taskParticipantSchema),
   attachments: z.array(taskAttachmentSchema),
+  subtasks: z.array(portalTaskSchema).optional(),
+  activity: z.array(taskActivityItemSchema).optional(),
 })
 
 export const taskChecklistCreateSchema = z.object({
@@ -1081,6 +1113,7 @@ export const chatChannelCreateSchema = z.object({
 export const chatMessageCreateSchema = z.object({
   body: z.string().trim().min(1).max(10000),
   replyToId: z.string().uuid().optional().nullable(),
+  mentionIds: z.array(z.string().uuid()).max(50).optional().default([]),
 })
 
 export const chatMessageSchema = z.object({

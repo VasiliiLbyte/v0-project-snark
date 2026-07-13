@@ -15,11 +15,8 @@ import {
   mockGetChannelByTaskId,
   mockPostSystemMessage,
 } from "@/lib/repositories/chat.mock-store"
+import { isMockDb } from "@/lib/config/mode"
 import type { PortalTask, TaskStatus } from "@/types/portal"
-
-function useMockDb(): boolean {
-  return process.env.USE_MOCK_DB !== "false"
-}
 
 export function collectTaskMemberIds(task: {
   creatorId: string
@@ -33,7 +30,7 @@ export function collectTaskMemberIds(task: {
 }
 
 export async function getTaskParticipantIds(taskId: string): Promise<string[]> {
-  if (useMockDb()) return []
+  if (isMockDb()) return []
 
   const rows = await db
     .select({ userId: taskParticipants.userId })
@@ -44,7 +41,7 @@ export async function getTaskParticipantIds(taskId: string): Promise<string[]> {
 }
 
 export async function getTaskChannelId(taskId: string): Promise<string | null> {
-  if (useMockDb()) return mockGetChannelByTaskId(taskId)
+  if (isMockDb()) return mockGetChannelByTaskId(taskId)
 
   const [row] = await db
     .select({ id: chatChannels.id })
@@ -59,7 +56,7 @@ export async function ensureTaskChatChannel(
   task: PortalTask,
   participantIds: string[] = []
 ): Promise<string | null> {
-  if (useMockDb()) {
+  if (isMockDb()) {
     return mockEnsureTaskChannel({
       taskId: task.id,
       title: task.title,
@@ -109,7 +106,7 @@ export async function ensureTaskChatChannel(
 }
 
 export async function syncTaskChatMembers(taskId: string, memberIds: string[]): Promise<void> {
-  if (useMockDb()) return
+  if (isMockDb()) return
 
   const channelId = await getTaskChannelId(taskId)
   if (!channelId) return
@@ -152,7 +149,7 @@ export async function postTaskSystemMessage(
   body: string,
   metadata?: Record<string, unknown>
 ): Promise<void> {
-  if (useMockDb()) {
+  if (isMockDb()) {
     mockPostSystemMessage(channelId, actorId, body)
     return
   }
@@ -205,7 +202,7 @@ export async function notifyTaskCreatedFromMessage(
 }
 
 export async function linkTaskToMessage(taskId: string, messageId: string): Promise<void> {
-  if (useMockDb()) return
+  if (isMockDb()) return
 
   await db.insert(taskLinks).values({
     taskId,
@@ -215,7 +212,7 @@ export async function linkTaskToMessage(taskId: string, messageId: string): Prom
 }
 
 export async function updateTaskChannelName(taskId: string, title: string): Promise<void> {
-  if (useMockDb()) return
+  if (isMockDb()) return
 
   await db
     .update(chatChannels)
@@ -227,7 +224,7 @@ export async function loadTaskChannelMeta(taskId: string): Promise<{
   channelId: string | null
   taskTitle: string | null
 }> {
-  if (useMockDb()) return { channelId: null, taskTitle: null }
+  if (isMockDb()) return { channelId: null, taskTitle: null }
 
   const [row] = await db
     .select({ channelId: chatChannels.id, taskTitle: tasks.title })

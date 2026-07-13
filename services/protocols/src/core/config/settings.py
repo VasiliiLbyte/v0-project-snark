@@ -94,6 +94,16 @@ class Settings(BaseSettings):
     onec_username: str = Field(default="admin")
     onec_password: str = Field(default="")
 
+    # --- Портал SNARK (задачи из поручений) ---
+    portal_internal_url: str = Field(
+        default="http://localhost:3000",
+        description="Базовый URL портала без завершающего слэша.",
+    )
+    internal_token: str = Field(
+        default="",
+        description="Shared-secret X-Internal-Token для sync с порталом.",
+    )
+
     # --- Безопасность ---
     encryption_key: str = Field(default="")
     secret_key: str = Field(default="")

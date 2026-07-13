@@ -46,6 +46,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
     const created = await sendMessage(id, auth.userId, parsed.data.body, {
       replyToId: parsed.data.replyToId,
+      mentionIds: parsed.data.mentionIds,
     })
     await writeAuditLog({
       userId: auth.userId,
@@ -58,11 +59,20 @@ export async function POST(request: NextRequest, context: RouteContext) {
   } catch (error) {
     const known = error as Partial<AuthError>
     const message = error instanceof Error ? error.message : "Не удалось отправить сообщение"
-    const status = known.status ?? (message.includes("доступа") ? 403 : 500)
+    const status =
+      known.status ??
+      (message.includes("Слишком много") ? 429 : message.includes("доступа") ? 403 : 500)
     return NextResponse.json(
       apiErrorSchema.parse({
         error: status === 500 ? message : (known.message ?? message),
-        code: status === 403 ? "FORBIDDEN" : status === 500 ? "INTERNAL_ERROR" : (known.code ?? "AUTH_ERROR"),
+        code:
+          status === 429
+            ? "RATE_LIMITED"
+            : status === 403
+              ? "FORBIDDEN"
+              : status === 500
+                ? "INTERNAL_ERROR"
+                : (known.code ?? "AUTH_ERROR"),
       }),
       { status }
     )

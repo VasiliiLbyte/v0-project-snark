@@ -1,4 +1,5 @@
-import { DEV_USERS } from "@/lib/auth/dev-users"
+import { mockDisplayName } from "@/lib/auth/mock-users"
+import type { UserRole } from "@/types/auth"
 import type { ChatChannel, ChatMessage, ChatMessageType } from "@/types/portal"
 
 interface MockChannelRecord {
@@ -15,7 +16,7 @@ interface MockChannelRecord {
 interface MockMembership {
   channelId: string
   userId: string
-  lastReadAt: string
+  lastReadAt: string | null
 }
 
 const channels: MockChannelRecord[] = []
@@ -23,10 +24,10 @@ const messages: ChatMessage[] = []
 const memberships: MockMembership[] = []
 const directChannelKeys = new Map<string, string>()
 
+const EDIT_DELETE_WINDOW_MS = 15 * 60 * 1000
+
 function userName(userId: string): string {
-  const dev = DEV_USERS.find((user) => user.id === userId)
-  if (dev) return `${dev.lastName} ${dev.firstName}`.trim()
-  return "Сотрудник"
+  return mockDisplayName(userId)
 }
 
 function directKey(userA: string, userB: string): string {
@@ -41,10 +42,25 @@ function memberIds(channelId: string): string[] {
   return memberships.filter((item) => item.channelId === channelId).map((item) => item.userId)
 }
 
+function canBypassWindow(role?: UserRole): boolean {
+  return role === "admin" || role === "hr_manager"
+}
+
+function assertWindow(createdAt: string, role?: UserRole): void {
+  if (canBypassWindow(role)) return
+  if (Date.now() - new Date(createdAt).getTime() > EDIT_DELETE_WINDOW_MS) {
+    throw new Error("Редактирование/удаление доступно только в течение 15 минут")
+  }
+}
+
 function enrichChannel(channel: MockChannelRecord, viewerId: string): ChatChannel {
   const channelMessages = messages.filter((message) => message.channelId === channel.id)
   const lastMessage = channelMessages.length > 0 ? channelMessages[channelMessages.length - 1] : null
   const members = memberIds(channel.id)
+  const membership = memberships.find(
+    (item) => item.channelId === channel.id && item.userId === viewerId
+  )
+  const lastReadAt = membership?.lastReadAt ?? null
 
   let peerId: string | null = null
   let peerName: string | null = null
@@ -53,9 +69,11 @@ function enrichChannel(channel: MockChannelRecord, viewerId: string): ChatChanne
     peerName = peerId ? userName(peerId) : null
   }
 
-  const unreadCount = channelMessages.filter(
-    (message) => message.authorId !== viewerId && message.messageType === "user"
-  ).length
+  const unreadCount = channelMessages.filter((message) => {
+    if (message.authorId === viewerId || message.messageType !== "user") return false
+    if (lastReadAt == null) return true
+    return new Date(message.createdAt) > new Date(lastReadAt)
+  }).length
 
   return {
     id: channel.id,
@@ -74,14 +92,20 @@ function enrichChannel(channel: MockChannelRecord, viewerId: string): ChatChanne
   }
 }
 
-function addMembers(channelId: string, userIds: string[]): void {
+function addMembers(
+  channelId: string,
+  userIds: string[],
+  options?: { creatorId?: string; markCreatorRead?: boolean }
+): void {
   const unique = Array.from(new Set(userIds))
   for (const userId of unique) {
     if (isMember(channelId, userId)) continue
+    const isCreator = options?.creatorId === userId && options.markCreatorRead
     memberships.push({
       channelId,
       userId,
-      lastReadAt: new Date().toISOString(),
+      // Новый участник с null → полный unread истории
+      lastReadAt: isCreator ? new Date().toISOString() : null,
     })
   }
 }
@@ -120,7 +144,10 @@ export function mockCreateChannel(params: {
     updatedAt: now,
   }
   channels.unshift(channel)
-  addMembers(channel.id, [params.createdBy, ...params.memberIds])
+  addMembers(channel.id, [params.createdBy, ...params.memberIds], {
+    creatorId: params.createdBy,
+    markCreatorRead: true,
+  })
 
   if (params.type === "direct") {
     const members = memberIds(channel.id)
@@ -199,6 +226,33 @@ export function mockAddChannelMembers(
   return enrichChannel(channel, actorUserId)
 }
 
+export function mockRemoveChannelMembers(
+  channelId: string,
+  actorUserId: string,
+  removeIds: string[]
+): ChatChannel | null {
+  const channel = channels.find((item) => item.id === channelId)
+  if (!channel || !isMember(channelId, actorUserId)) return null
+  if (channel.type === "direct") return null
+
+  for (const userId of removeIds) {
+    if (userId === channel.createdBy) continue
+    const index = memberships.findIndex(
+      (item) => item.channelId === channelId && item.userId === userId
+    )
+    if (index >= 0) memberships.splice(index, 1)
+  }
+  channel.updatedAt = new Date().toISOString()
+  return enrichChannel(channel, actorUserId)
+}
+
+export function mockMarkChannelRead(channelId: string, userId: string): void {
+  const membership = memberships.find(
+    (item) => item.channelId === channelId && item.userId === userId
+  )
+  if (membership) membership.lastReadAt = new Date().toISOString()
+}
+
 export function mockListMessages(channelId: string, userId: string, limit = 50): ChatMessage[] {
   if (!isMember(channelId, userId)) {
     throw new Error("Нет доступа к каналу")
@@ -221,7 +275,7 @@ export function mockSendMessage(
     id: crypto.randomUUID(),
     channelId,
     authorId: userId,
-    authorName: userId === userId ? "Вы" : userName(userId),
+    authorName: "Вы",
     body,
     messageType: options?.messageType ?? "user",
     replyToId: options?.replyToId ?? null,
@@ -230,19 +284,15 @@ export function mockSendMessage(
     createdAt: new Date().toISOString(),
     editedAt: null,
   }
-  message.authorName = "Вы"
   messages.push(message)
+  mockMarkChannelRead(channelId, userId)
   if (channel) channel.updatedAt = message.createdAt
   return message
 }
 
-export function mockPostSystemMessage(
-  channelId: string,
-  actorId: string,
-  body: string
-): void {
+export function mockPostSystemMessage(channelId: string, actorId: string, body: string): void {
   if (!isMember(channelId, actorId)) {
-    addMembers(channelId, [actorId])
+    addMembers(channelId, [actorId], { creatorId: actorId, markCreatorRead: true })
   }
   mockSendMessage(channelId, actorId, body, { messageType: "system" })
 }
@@ -251,6 +301,45 @@ export function mockGetMessageById(messageId: string): ChatMessage | null {
   return messages.find((message) => message.id === messageId) ?? null
 }
 
+export function mockEditMessage(
+  channelId: string,
+  messageId: string,
+  userId: string,
+  body: string,
+  role?: UserRole
+): ChatMessage | null {
+  const message = messages.find((item) => item.id === messageId && item.channelId === channelId)
+  if (!message) return null
+  if (!isMember(channelId, userId)) throw new Error("Нет доступа к каналу")
+  if (message.authorId !== userId) throw new Error("Можно редактировать только свои сообщения")
+  if (message.messageType !== "user") throw new Error("Системные сообщения нельзя редактировать")
+  assertWindow(message.createdAt, role)
+  message.body = body
+  message.editedAt = new Date().toISOString()
+  return message
+}
+
+export function mockDeleteMessage(
+  channelId: string,
+  messageId: string,
+  userId: string,
+  role?: UserRole
+): boolean {
+  const index = messages.findIndex((item) => item.id === messageId && item.channelId === channelId)
+  if (index < 0) return false
+  const message = messages[index]
+  if (!isMember(channelId, userId)) throw new Error("Нет доступа к каналу")
+  if (message.authorId !== userId) throw new Error("Можно удалять только свои сообщения")
+  if (message.messageType !== "user") throw new Error("Системные сообщения нельзя удалять")
+  assertWindow(message.createdAt, role)
+  messages.splice(index, 1)
+  return true
+}
+
 export function mockUserCanAccessChannel(channelId: string, userId: string): boolean {
   return isMember(channelId, userId)
+}
+
+export function getMockChannelMemberIds(channelId: string): string[] {
+  return memberIds(channelId)
 }

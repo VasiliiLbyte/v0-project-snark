@@ -27,6 +27,7 @@ import {
 import { mapContactsData, mapDocumentsData, mapProfileData } from "@/lib/mappers/portal"
 import { mockPortalRepository } from "@/lib/repositories/portal-repository.mock"
 import { listMyDashboardTasks } from "@/lib/repositories/tasks.repository"
+import { syncAllDepartmentChannels } from "@/lib/repositories/department-channels"
 import type { PortalRepository } from "@/lib/repositories/portal-repository.types"
 import type {
   AdminDepartmentItem,
@@ -2565,6 +2566,14 @@ export const drizzlePortalRepository: PortalRepository = {
           .where(eq(employeeProfiles.userId, existingUserId))
 
         employeesUpdated += 1
+      }
+    }
+
+    if (options.applyDepartments || options.applyEmployees) {
+      try {
+        await syncAllDepartmentChannels(options.userId ?? null)
+      } catch {
+        warnings.push("Не удалось синхронизировать каналы отделов")
       }
     }
 

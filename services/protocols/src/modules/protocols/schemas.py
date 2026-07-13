@@ -165,7 +165,7 @@ class ActionItemSchema(BaseModel):
         json_schema_extra={
             "example": {
                 "text": "Подготовить отчёт по KPI за Q1",
-                "assignee": "Иванов И.И.",
+                "assignee": "Иванов Иван",
                 "assignee_position": "Руководитель отдела",
                 "deadline": "2026-04-15",
                 "priority": "high",
@@ -182,7 +182,7 @@ class ActionItemSchema(BaseModel):
     )
     assignee: str = Field(
         ...,
-        description="ФИО ответственного",
+        description="ФИО ответственного в формате «Фамилия Имя»",
     )
     assignee_position: str | None = Field(
         default=None,

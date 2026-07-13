@@ -28,6 +28,7 @@ export default async function ChatPage() {
         initial={data}
         employees={contacts.employees}
         currentUserId={session.userId}
+        currentUserRole={session.role}
       />
     </Suspense>
   )

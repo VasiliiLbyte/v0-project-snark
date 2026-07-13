@@ -30,16 +30,24 @@ import {
   TASK_PRIORITY_OPTIONS,
   TASK_STATUS_LABEL,
 } from "@/lib/portal-data/tasks-ui"
+import { isTaskOverdue } from "@/lib/tasks/overdue"
 import { cn } from "@/lib/utils"
+import { TaskKanban } from "@/components/tasks/task-kanban"
 import type { Employee, PortalTask, TaskPriority, TasksListResponse } from "@/types/portal"
 
 interface TasksPageContentProps {
   initial: TasksListResponse
   employees: Employee[]
   currentUserId: string
+  initialFilters: {
+    scope: string
+    status: string
+    priority: string
+    q: string
+  }
 }
 
-type TabFilter = "all" | "mine" | "assigned" | "important"
+type ScopeTab = "all" | "mine" | "created" | "watching" | "overdue" | "important"
 
 function formatDate(value: string | null): string {
   if (!value) return "—"
@@ -54,15 +62,29 @@ function formatDate(value: string | null): string {
   }
 }
 
-function isOverdue(task: PortalTask): boolean {
-  if (!task.dueDate || task.status === "done" || task.status === "cancelled") return false
-  return new Date(task.dueDate) < new Date(new Date().toDateString())
+function toDateOnly(date: Date): string {
+  return date.toISOString().slice(0, 10)
 }
 
-export function TasksPageContent({ initial, employees, currentUserId }: TasksPageContentProps) {
+function applyDuePreset(preset: "today" | "tomorrow" | "week"): string {
+  const date = new Date()
+  if (preset === "tomorrow") date.setDate(date.getDate() + 1)
+  if (preset === "week") date.setDate(date.getDate() + 7)
+  return toDateOnly(date)
+}
+
+export function TasksPageContent({
+  initial,
+  employees,
+  currentUserId,
+  initialFilters,
+}: TasksPageContentProps) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
-  const [tab, setTab] = useState<TabFilter>("all")
+  const [scope, setScope] = useState<ScopeTab>((initialFilters.scope as ScopeTab) || "all")
+  const [statusFilter, setStatusFilter] = useState(initialFilters.status || "all")
+  const [priorityFilter, setPriorityFilter] = useState(initialFilters.priority || "all")
+  const [search, setSearch] = useState(initialFilters.q)
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [priority, setPriority] = useState<TaskPriority>("medium")
@@ -76,19 +98,28 @@ export function TasksPageContent({ initial, employees, currentUserId }: TasksPag
   const [completeTask, setCompleteTask] = useState<PortalTask | null>(null)
   const [completionResult, setCompletionResult] = useState("")
   const [completeFile, setCompleteFile] = useState<File | null>(null)
+  const [view, setView] = useState<"list" | "kanban">("list")
 
-  const tasks = useMemo(() => {
-    let list = initial.items
-    if (tab === "important") list = list.filter((t) => t.isImportant)
-    if (tab === "mine") {
-      list = list.filter(
-        (t) =>
-          t.status === "in_progress" &&
-          (t.assigneeId === currentUserId || t.creatorId === currentUserId)
-      )
-    }
-    return list
-  }, [initial.items, tab, currentUserId])
+  const applyFilters = (next: {
+    scope?: ScopeTab
+    status?: string
+    priority?: string
+    q?: string
+  }) => {
+    const params = new URLSearchParams()
+    const nextScope = next.scope ?? scope
+    const nextStatus = next.status ?? statusFilter
+    const nextPriority = next.priority ?? priorityFilter
+    const nextQ = next.q ?? search
+    if (nextScope && nextScope !== "all") params.set("scope", nextScope)
+    if (nextStatus && nextStatus !== "all") params.set("status", nextStatus)
+    if (nextPriority && nextPriority !== "all") params.set("priority", nextPriority)
+    if (nextQ.trim()) params.set("q", nextQ.trim())
+    const qs = params.toString()
+    startTransition(() => router.push(qs ? `/tasks?${qs}` : "/tasks"))
+  }
+
+  const tasks = useMemo(() => initial.items, [initial.items])
 
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -153,7 +184,10 @@ export function TasksPageContent({ initial, employees, currentUserId }: TasksPag
     const formData = new FormData()
     formData.append("completionResult", completionResult.trim())
     if (completeFile) formData.append("file", completeFile)
-    const response = await fetch(`/api/tasks/${completeTask.id}/complete`, { method: "POST", body: formData })
+    const response = await fetch(`/api/tasks/${completeTask.id}/complete`, {
+      method: "POST",
+      body: formData,
+    })
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as { error?: string }
       setError(body.error ?? "Не удалось завершить задачу")
@@ -185,9 +219,12 @@ export function TasksPageContent({ initial, employees, currentUserId }: TasksPag
     router.push(`/chat?channel=${body.channelId}`)
   }
 
-  const tabs: { id: TabFilter; label: string }[] = [
-    { id: "all", label: "Все задачи" },
-    { id: "mine", label: "В работе" },
+  const tabs: { id: ScopeTab; label: string }[] = [
+    { id: "all", label: "Все" },
+    { id: "mine", label: "Мои" },
+    { id: "created", label: "Поставленные мной" },
+    { id: "watching", label: "Наблюдаю" },
+    { id: "overdue", label: "Просроченные" },
     { id: "important", label: "Важные" },
   ]
 
@@ -196,7 +233,7 @@ export function TasksPageContent({ initial, employees, currentUserId }: TasksPag
       <Card className="p-6">
         <h1 className="text-2xl font-semibold">Задачи</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Список поручений — как в Bitrix24: роли, сроки, файлы, чат задачи.
+          Список поручений: фильтры, сроки, файлы, чат задачи.
         </p>
 
         <form onSubmit={onSubmit} className="mt-6 space-y-4 border-t pt-6">
@@ -222,6 +259,32 @@ export function TasksPageContent({ initial, employees, currentUserId }: TasksPag
             </div>
             <div className="space-y-2">
               <Label htmlFor="task-due">Крайний срок</Label>
+              <div className="mb-2 flex flex-wrap gap-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setDueDate(applyDuePreset("today"))}
+                >
+                  Сегодня
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setDueDate(applyDuePreset("tomorrow"))}
+                >
+                  Завтра
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setDueDate(applyDuePreset("week"))}
+                >
+                  Через неделю
+                </Button>
+              </div>
               <Input
                 id="task-due"
                 type="date"
@@ -250,7 +313,7 @@ export function TasksPageContent({ initial, employees, currentUserId }: TasksPag
             </div>
             <div className="space-y-2 md:col-span-2">
               <Label>Наблюдатели</Label>
-              <div className="flex flex-wrap gap-2 mb-2">
+              <div className="mb-2 flex flex-wrap gap-2">
                 {watcherIds.map((id) => {
                   const employee = employees.find((e) => e.userId === id)
                   return (
@@ -270,9 +333,7 @@ export function TasksPageContent({ initial, employees, currentUserId }: TasksPag
               <div className="flex gap-2">
                 <EmployeePicker
                   employees={employees.filter(
-                    (e) =>
-                      e.userId !== assigneeId &&
-                      !watcherIds.includes(e.userId)
+                    (e) => e.userId !== assigneeId && !watcherIds.includes(e.userId)
                   )}
                   value={selectedWatcherId}
                   onChange={setSelectedWatcherId}
@@ -295,7 +356,7 @@ export function TasksPageContent({ initial, employees, currentUserId }: TasksPag
             <div className="space-y-2 md:col-span-2">
               <Label className="flex items-center gap-2">
                 <Paperclip className="h-4 w-4" />
-                Прикрепить файл
+                Прикрепить файл (до 25 МБ)
               </Label>
               <Input type="file" onChange={(e) => setCreateFile(e.target.files?.[0] ?? null)} />
             </div>
@@ -308,43 +369,120 @@ export function TasksPageContent({ initial, employees, currentUserId }: TasksPag
       </Card>
 
       <Card className="p-6">
-        <div className="mb-4 flex flex-wrap gap-2 border-b pb-4">
-          {tabs.map((item) => (
-            <Button
-              key={item.id}
-              type="button"
-              variant={tab === item.id ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setTab(item.id)}
+        <div className="mb-4 space-y-3 border-b pb-4">
+          <div className="flex flex-wrap gap-2">
+            {tabs.map((item) => (
+              <Button
+                key={item.id}
+                type="button"
+                variant={scope === item.id ? "default" : "ghost"}
+                size="sm"
+                onClick={() => {
+                  setScope(item.id)
+                  applyFilters({ scope: item.id })
+                }}
+              >
+                {item.label}
+              </Button>
+            ))}
+            <span className="ml-auto flex items-center gap-2 self-center text-sm text-muted-foreground">
+              <Button
+                type="button"
+                size="sm"
+                variant={view === "list" ? "default" : "outline"}
+                onClick={() => setView("list")}
+              >
+                Список
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={view === "kanban" ? "default" : "outline"}
+                onClick={() => setView("kanban")}
+              >
+                Канбан
+              </Button>
+              <span>Всего: {initial.total}</span>
+            </span>
+          </div>
+          <div className="grid gap-2 md:grid-cols-4">
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") applyFilters({ q: search })
+              }}
+              placeholder="Поиск по названию..."
+            />
+            <Select
+              value={statusFilter}
+              onValueChange={(value) => {
+                setStatusFilter(value)
+                applyFilters({ status: value })
+              }}
             >
-              {item.label}
+              <SelectTrigger>
+                <SelectValue placeholder="Статус" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Все статусы</SelectItem>
+                {Object.entries(TASK_STATUS_LABEL).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={priorityFilter}
+              onValueChange={(value) => {
+                setPriorityFilter(value)
+                applyFilters({ priority: value })
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Приоритет" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Все приоритеты</SelectItem>
+                {TASK_PRIORITY_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {TASK_PRIORITY_LABEL[option]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button type="button" variant="outline" onClick={() => applyFilters({ q: search })}>
+              Найти
             </Button>
-          ))}
-          <span className="ml-auto text-sm text-muted-foreground self-center">
-            Всего: {initial.total}
-          </span>
+          </div>
         </div>
 
-        {tasks.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-8 text-center">Задач нет</p>
+        {view === "kanban" ? (
+          <TaskKanban tasks={tasks} onStatusChange={(taskId, status) => patchStatus(taskId, status)} />
+        ) : tasks.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">Задач нет</p>
         ) : (
           <div className="divide-y">
             {tasks.map((task) => {
-              const overdue = isOverdue(task)
+              const overdue = task.isOverdue ?? isTaskOverdue(task)
               const active = task.status !== "done" && task.status !== "cancelled"
               return (
                 <div
                   key={task.id}
                   className={cn(
                     "flex flex-wrap items-center gap-3 py-4 first:pt-0 last:pb-0",
-                    overdue && "bg-destructive/5 -mx-2 px-2 rounded-md"
+                    overdue && "-mx-2 rounded-md bg-destructive/5 px-2"
                   )}
                 >
                   <Button
                     type="button"
                     size="icon"
                     variant={task.isImportant ? "default" : "ghost"}
-                    className={cn("shrink-0", task.isImportant && "bg-orange-500 hover:bg-orange-600")}
+                    className={cn(
+                      "shrink-0",
+                      task.isImportant && "bg-orange-500 hover:bg-orange-600"
+                    )}
                     onClick={() => void toggleImportant(task)}
                     title="Важная"
                   >
@@ -354,32 +492,47 @@ export function TasksPageContent({ initial, employees, currentUserId }: TasksPag
                   <div className="min-w-0 flex-1">
                     <Link
                       href={`/tasks/${task.id}`}
-                      className="font-medium hover:underline line-clamp-1"
+                      className="line-clamp-1 font-medium hover:underline"
                     >
                       {task.title}
                     </Link>
                     {task.description ? (
-                      <p className="text-xs text-muted-foreground line-clamp-1">{task.description}</p>
+                      <p className="line-clamp-1 text-xs text-muted-foreground">
+                        {task.description}
+                      </p>
                     ) : null}
                     <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
                       <span>Постановщик: {task.creatorName}</span>
                       {task.assigneeName ? <span>· Исполнитель: {task.assigneeName}</span> : null}
+                      {overdue ? <Badge variant="destructive">Просрочена</Badge> : null}
+                      {task.requiresAssignment || (task.protocolActionItemId && !task.assigneeId) ? (
+                        <Badge variant="outline">Требует назначения</Badge>
+                      ) : null}
                     </div>
                   </div>
 
                   <Badge variant={overdue ? "destructive" : "secondary"}>
                     {TASK_STATUS_LABEL[task.status]}
                   </Badge>
-                  <span className={cn("text-sm whitespace-nowrap", overdue && "text-destructive font-medium")}>
+                  <span
+                    className={cn(
+                      "whitespace-nowrap text-sm",
+                      overdue && "font-medium text-destructive"
+                    )}
+                  >
                     {formatDate(task.dueDate)}
                   </span>
-                  <span className="text-xs text-muted-foreground hidden sm:inline">
+                  <span className="hidden text-xs text-muted-foreground sm:inline">
                     {TASK_PRIORITY_LABEL[task.priority]}
                   </span>
 
                   <div className="flex flex-wrap gap-1">
                     {active && task.status === "new" ? (
-                      <Button size="sm" variant="outline" onClick={() => void patchStatus(task.id, "in_progress")}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void patchStatus(task.id, "in_progress")}
+                      >
                         <Play className="mr-1 h-3 w-3" />
                         Начать
                       </Button>
@@ -395,12 +548,24 @@ export function TasksPageContent({ initial, employees, currentUserId }: TasksPag
                         Завершить
                       </Button>
                     ) : null}
-                    <Button size="icon" variant="ghost" title="Чат" onClick={() => void openTaskChat(task.id)}>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      title="Чат"
+                      onClick={() => void openTaskChat(task.id)}
+                    >
                       <MessageSquare className="h-4 w-4" />
                     </Button>
-                    <Button size="icon" variant="ghost" title="Удалить" onClick={() => void deleteTask(task.id)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    {task.creatorId === currentUserId ? (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        title="Удалить"
+                        onClick={() => void deleteTask(task.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
               )
@@ -412,11 +577,11 @@ export function TasksPageContent({ initial, employees, currentUserId }: TasksPag
       <Dialog open={Boolean(completeTask)} onOpenChange={(open) => !open && setCompleteTask(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Завершить: {completeTask?.title}</DialogTitle>
+            <DialogTitle>Завершить задачу</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Результат выполнения *</Label>
+              <Label>Результат *</Label>
               <Textarea
                 value={completionResult}
                 onChange={(e) => setCompletionResult(e.target.value)}
@@ -424,18 +589,15 @@ export function TasksPageContent({ initial, employees, currentUserId }: TasksPag
               />
             </div>
             <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Paperclip className="h-4 w-4" />
-                Файл (необязательно)
-              </Label>
+              <Label>Файл результата</Label>
               <Input type="file" onChange={(e) => setCompleteFile(e.target.files?.[0] ?? null)} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCompleteTask(null)}>
+            <Button type="button" variant="outline" onClick={() => setCompleteTask(null)}>
               Отмена
             </Button>
-            <Button onClick={() => void submitComplete()} disabled={!completionResult.trim()}>
+            <Button type="button" onClick={() => void submitComplete()}>
               Завершить
             </Button>
           </DialogFooter>

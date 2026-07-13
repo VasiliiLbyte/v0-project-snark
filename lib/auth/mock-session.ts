@@ -1,5 +1,5 @@
 import crypto from "node:crypto"
-import { findDevUserById } from "@/lib/auth/dev-users"
+import { findMockAuthUserById } from "@/lib/auth/mock-users"
 
 interface MockSessionRow {
   id: string
@@ -41,7 +41,7 @@ export async function mockValidateSession(refreshToken: string) {
   const hash = hashRefreshToken(refreshToken)
   for (const session of sessions.values()) {
     if (session.tokenHash !== hash || session.revokedAt || session.expiresAt <= now) continue
-    const user = findDevUserById(session.userId)
+    const user = findMockAuthUserById(session.userId)
     if (!user || !user.isActive) return null
     return {
       id: session.id,

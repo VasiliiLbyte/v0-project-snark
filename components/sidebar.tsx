@@ -122,7 +122,13 @@ export function Sidebar({
                   <div className="text-sm font-medium">{item.label}</div>
                   <div className="text-xs opacity-60">{item.description}</div>
                 </div>
-                {isActive && <ChevronRight className="h-4 w-4 shrink-0" />}
+                {item.badge ? (
+                  <span className="rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-semibold text-destructive-foreground">
+                    {item.badge > 99 ? "99+" : item.badge}
+                  </span>
+                ) : isActive ? (
+                  <ChevronRight className="h-4 w-4 shrink-0" />
+                ) : null}
               </Link>
             )
           })}

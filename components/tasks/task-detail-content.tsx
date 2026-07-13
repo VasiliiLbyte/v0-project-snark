@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useRef, useState, useTransition } from "react"
 import { Flame, Paperclip, Trash2 } from "lucide-react"
+import { LiteMarkdownText } from "@/components/chat/message-body-with-mentions"
 import { EmployeePicker } from "@/components/shared/employee-picker"
 import { TaskInlineChat } from "@/components/tasks/task-inline-chat"
 import { Badge } from "@/components/ui/badge"
@@ -32,6 +33,7 @@ import {
   TASK_PRIORITY_OPTIONS,
   TASK_STATUS_LABEL,
 } from "@/lib/portal-data/tasks-ui"
+import { isTaskOverdue } from "@/lib/tasks/overdue"
 import { cn } from "@/lib/utils"
 import type { Employee, TaskDetail, TaskPriority, TaskStatus } from "@/types/portal"
 
@@ -73,6 +75,8 @@ export function TaskDetailContent({
   const [completeFile, setCompleteFile] = useState<File | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [selectedWatcherId, setSelectedWatcherId] = useState<string | null>(null)
+  const [subtaskTitle, setSubtaskTitle] = useState("")
+  const [creatingSubtask, setCreatingSubtask] = useState(false)
 
   const watchers = task.participants.filter((p) => p.role === "watcher")
   const canDelete =
@@ -229,8 +233,51 @@ export function TaskDetailContent({
     setCommentBody("")
   }
 
+  const createSubtask = async () => {
+    if (!subtaskTitle.trim() || task.parentTaskId) return
+    setCreatingSubtask(true)
+    try {
+      const response = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: subtaskTitle.trim(),
+          parentTaskId: task.id,
+          assigneeId: task.assigneeId,
+        }),
+      })
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string }
+        setError(body.error ?? "Не удалось создать подзадачу")
+        return
+      }
+      setSubtaskTitle("")
+      const detailRes = await fetch(`/api/tasks/${task.id}`)
+      if (detailRes.ok) {
+        const body = (await detailRes.json()) as { item: TaskDetail }
+        if (body.item) applyTask(body.item)
+      }
+      refresh()
+    } finally {
+      setCreatingSubtask(false)
+    }
+  }
+
   const doneCount = task.checklist.filter((item) => item.isDone).length
   const isActive = task.status !== "done" && task.status !== "cancelled"
+  const overdue = task.isOverdue ?? isTaskOverdue(task)
+  const canHaveSubtasks = !task.parentTaskId
+
+  const activityLabel = (item: NonNullable<TaskDetail["activity"]>[number]) => {
+    if (item.action === "status_changed") {
+      return `Статус: ${item.oldValue ?? "—"} → ${item.newValue ?? "—"}`
+    }
+    if (item.action === "assignee_changed") return "Изменён исполнитель"
+    if (item.action === "due_date_changed") {
+      return `Срок: ${item.oldValue ?? "—"} → ${item.newValue ?? "—"}`
+    }
+    return item.action
+  }
 
   return (
     <div className="space-y-6">
@@ -261,6 +308,17 @@ export function TaskDetailContent({
             <Badge variant="secondary">{TASK_STATUS_LABEL[task.status]}</Badge>
             <Badge variant="outline">{TASK_PRIORITY_LABEL[task.priority]}</Badge>
             {task.isImportant ? <Badge className="bg-orange-500">Важная</Badge> : null}
+            {overdue ? <Badge variant="destructive">Просрочена</Badge> : null}
+            {task.requiresAssignment || (task.protocolActionItemId && !task.assigneeId) ? (
+              <Badge variant="outline">Требует назначения</Badge>
+            ) : null}
+            {task.parentTaskId ? (
+              <Badge variant="outline">
+                <Link href={`/tasks/${task.parentTaskId}`} className="hover:underline">
+                  Подзадача
+                </Link>
+              </Badge>
+            ) : null}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -399,9 +457,7 @@ export function TaskDetailContent({
                 {task.attachments.map((file) => (
                   <li key={file.id}>
                     <a
-                      href={file.fileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      href={`/api/tasks/${task.id}/attachments/${file.id}/download`}
                       className="text-sm text-primary hover:underline"
                     >
                       {file.fileName}
@@ -413,10 +469,68 @@ export function TaskDetailContent({
             )}
           </Card>
 
+          {canHaveSubtasks ? (
+            <Card className="p-6 space-y-4">
+              <h2 className="text-lg font-semibold">Подзадачи</h2>
+              {(task.subtasks ?? []).length === 0 ? (
+                <p className="text-sm text-muted-foreground">Подзадач пока нет</p>
+              ) : (
+                <ul className="space-y-2">
+                  {(task.subtasks ?? []).map((sub) => (
+                    <li key={sub.id} className="flex items-center justify-between gap-2 rounded-md border p-2">
+                      <Link href={`/tasks/${sub.id}`} className="text-sm font-medium hover:underline">
+                        {sub.title}
+                      </Link>
+                      <div className="flex items-center gap-2">
+                        {(sub.isOverdue ?? isTaskOverdue(sub)) ? (
+                          <Badge variant="destructive">Просрочена</Badge>
+                        ) : null}
+                        <Badge variant="secondary">{TASK_STATUS_LABEL[sub.status]}</Badge>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="flex gap-2">
+                <Input
+                  value={subtaskTitle}
+                  onChange={(event) => setSubtaskTitle(event.target.value)}
+                  placeholder="Название подзадачи"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={creatingSubtask || !subtaskTitle.trim()}
+                  onClick={() => void createSubtask()}
+                >
+                  Добавить
+                </Button>
+              </div>
+            </Card>
+          ) : null}
+
+          <Card className="p-6 space-y-4">
+            <h2 className="text-lg font-semibold">История</h2>
+            {(task.activity ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground">Пока нет изменений статуса, исполнителя или срока</p>
+            ) : (
+              <ul className="space-y-2">
+                {(task.activity ?? []).map((item) => (
+                  <li key={item.id} className="rounded-md border p-3 text-sm">
+                    <div className="text-xs text-muted-foreground">
+                      {item.actorName ?? "Система"} · {formatDate(item.createdAt)}
+                    </div>
+                    <p className="mt-1">{activityLabel(item)}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
           {task.status === "done" && task.completionResult ? (
             <Card className="p-6 space-y-2">
               <h2 className="text-lg font-semibold">Результат</h2>
-              <p className="text-sm whitespace-pre-wrap">{task.completionResult}</p>
+              <LiteMarkdownText text={task.completionResult} />
             </Card>
           ) : null}
 
@@ -464,7 +578,7 @@ export function TaskDetailContent({
                   <div className="text-xs text-muted-foreground">
                     {comment.authorName} · {formatDate(comment.createdAt)}
                   </div>
-                  <p className="mt-1 text-sm whitespace-pre-wrap">{comment.body}</p>
+                  <LiteMarkdownText text={comment.body} className="mt-1" />
                 </div>
               ))}
             </div>
@@ -493,8 +607,9 @@ export function TaskDetailContent({
             <div>
               <span className="text-muted-foreground">Статус:</span> {TASK_STATUS_LABEL[task.status]}
             </div>
-            <div>
+            <div className={cn(overdue && "font-medium text-destructive")}>
               <span className="text-muted-foreground">Срок:</span> {formatDate(task.dueDate)}
+              {overdue ? " · просрочена" : ""}
             </div>
             <div>
               <span className="text-muted-foreground">Создана:</span> {formatDate(task.createdAt)}

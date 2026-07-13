@@ -158,6 +158,14 @@ class ProtocolService:
                 items=action_items_data,
             )
 
+            # === Этап 5b: синхронизация поручений → задачи портала ===
+            await self._sync_portal_tasks(
+                protocol_id=protocol_id,
+                protocol_title=protocol.title,
+                meeting_date=str(protocol.meeting_date) if protocol.meeting_date else None,
+                action_items=action_items,
+            )
+
             # === Этап 6: Анализ тональности → БД ===
             await self.repository.save_tone_analysis(
                 protocol_id=protocol_id,
@@ -485,6 +493,73 @@ class ProtocolService:
             prompt=prompt,
             output_schema=ToneAnalysisSchema,
         )
+
+    async def _sync_portal_tasks(
+        self,
+        protocol_id: int,
+        protocol_title: str | None,
+        meeting_date: str | None,
+        action_items: list,
+    ) -> None:
+        """Отправить поручения на портал для создания задач.
+
+        POST {PORTAL_INTERNAL_URL}/api/internal/protocols/action-items/sync
+        с заголовком X-Internal-Token. Ошибки портала не валят пайплайн.
+        """
+        import httpx
+
+        token = (settings.internal_token or "").strip()
+        base = (settings.portal_internal_url or "").rstrip("/")
+        if not token or not base:
+            logger.warning(
+                "Пропуск sync с порталом: не заданы PORTAL_INTERNAL_URL / INTERNAL_TOKEN",
+                protocol_id=protocol_id,
+            )
+            return
+
+        payload = {
+            "protocolId": protocol_id,
+            "protocolTitle": protocol_title,
+            "meetingDate": meeting_date,
+            "actionItems": [
+                {
+                    "id": item.id,
+                    "text": item.text,
+                    "assignee": item.assignee,
+                    "deadline": item.deadline.isoformat() if item.deadline else None,
+                    "priority": item.priority.value if hasattr(item.priority, "value") else str(item.priority),
+                }
+                for item in action_items
+            ],
+        }
+        url = f"{base}/api/internal/protocols/action-items/sync"
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    url,
+                    json=payload,
+                    headers={"X-Internal-Token": token},
+                )
+            if response.is_success:
+                logger.info(
+                    "Поручения синхронизированы с порталом",
+                    protocol_id=protocol_id,
+                    status_code=response.status_code,
+                )
+            else:
+                logger.error(
+                    "Портал отклонил sync поручений",
+                    protocol_id=protocol_id,
+                    status_code=response.status_code,
+                    body=response.text[:500],
+                )
+        except Exception as exc:
+            logger.error(
+                "Ошибка sync поручений с порталом",
+                protocol_id=protocol_id,
+                error=str(exc),
+                exc_info=True,
+            )
 
     async def _create_onec_tasks(
         self,

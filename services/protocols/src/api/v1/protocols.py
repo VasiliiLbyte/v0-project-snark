@@ -21,7 +21,7 @@ from urllib.parse import quote
 
 import structlog
 from celery.result import AsyncResult
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
 from docx import Document
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -475,21 +475,23 @@ async def retry_protocol_processing(
 async def update_action_item_status(
     item_id: int,
     new_status: ActionItemStatusEnum,
+    request: Request,
     session: AsyncSession = Depends(get_async_session),
 ) -> dict:
     """Обновить статус поручения (action item).
 
-    Args:
-        item_id: идентификатор поручения.
-        new_status: новый статус.
-        session: сессия БД.
-
-    Returns:
-        Подтверждение обновления.
-
-    Raises:
-        HTTPException: 404 если поручение не найдено.
+    Если задан INTERNAL_TOKEN — ожидается заголовок X-Internal-Token
+    (вызов с портала при завершении задачи).
     """
+    expected = (settings.internal_token or "").strip()
+    if expected:
+        provided = (request.headers.get("X-Internal-Token") or "").strip()
+        if provided != expected:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Неверный внутренний токен",
+            )
+
     repo = ProtocolRepository(session)
     item = await repo.update_action_item_status(
         item_id=item_id,
@@ -507,7 +509,6 @@ async def update_action_item_status(
         item_id=item_id,
         new_status=new_status.value,
     )
-
     return {
         "id": item.id,
         "status": item.status.value,

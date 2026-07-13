@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { useMockAuth } from "@/lib/auth/mock-mode"
+import { isMockAuth } from "@/lib/config/mode"
 import { mockRevokeSession } from "@/lib/auth/mock-session"
 import { revokeSession } from "@/lib/auth/session"
 import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from "@/lib/auth/tokens"
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
       ?.split("=")[1]
 
     if (refreshToken) {
-      if (useMockAuth()) {
+      if (isMockAuth()) {
         await mockRevokeSession(refreshToken)
       } else {
         await revokeSession(refreshToken)

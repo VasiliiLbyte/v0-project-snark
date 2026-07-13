@@ -344,6 +344,7 @@ export interface SidebarItem {
   description?: string
   href: string
   roles?: UserRole[]
+  badge?: number
 }
 
 export interface DepartmentTreeHead {
@@ -772,11 +773,15 @@ export interface PortalTask {
   departmentId: string | null
   departmentName: string | null
   dueDate: string | null
+  parentTaskId?: string | null
   protocolActionItemId: number | null
   sourceMessageId: string | null
   sourceChannelId: string | null
   chatChannelId: string | null
   isImportant: boolean
+  isOverdue?: boolean
+  /** Нет исполнителя у задачи из протокола — нужна ручная привязка. */
+  requiresAssignment?: boolean
   completionResult: string | null
   completedAt: string | null
   createdAt: string
@@ -828,11 +833,25 @@ export interface TaskAttachment {
   createdAt: string
 }
 
+export interface TaskActivityItem {
+  id: string
+  taskId: string
+  actorId: string | null
+  actorName: string | null
+  action: string
+  field: string | null
+  oldValue: string | null
+  newValue: string | null
+  createdAt: string
+}
+
 export interface TaskDetail extends PortalTask {
   checklist: TaskChecklistItem[]
   comments: TaskComment[]
   participants: TaskParticipant[]
   attachments: TaskAttachment[]
+  subtasks?: PortalTask[]
+  activity?: TaskActivityItem[]
 }
 
 export interface TaskDetailResponse {
@@ -842,6 +861,15 @@ export interface TaskDetailResponse {
 export interface TasksQuery {
   status?: TaskStatus | "all"
   assigneeId?: string
+  creatorId?: string
+  departmentId?: string
+  priority?: TaskPriority
+  scope?: "all" | "mine" | "created" | "watching" | "overdue" | "important"
+  overdue?: boolean
+  q?: string
+  /** По умолчанию только корневые задачи (без parent). */
+  includeSubtasks?: boolean
+  parentTaskId?: string
   page?: number
   limit?: number
 }
@@ -861,6 +889,8 @@ export interface TaskCreatePayload {
   departmentId?: string | null
   dueDate?: string | null
   watcherIds?: string[]
+  parentTaskId?: string | null
+  protocolActionItemId?: number | null
   sourceMessageId?: string | null
   sourceChannelId?: string | null
 }
@@ -939,6 +969,7 @@ export interface ChatChannelCreatePayload {
 export interface ChatMessageCreatePayload {
   body: string
   replyToId?: string | null
+  mentionIds?: string[]
 }
 
 export interface TaskFromMessagePayload {

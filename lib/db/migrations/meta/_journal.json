@@ -113,6 +113,34 @@
       "when": 1779200000000,
       "tag": "0015_tasks_enhancements",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1784000000000,
+      "tag": "0016_chat_direct_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1784100000000,
+      "tag": "0017_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1784200000000,
+      "tag": "0018_tasks_iteration3",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1784300000000,
+      "tag": "0019_department_channels",
+      "breakpoints": true
     }
   ]
 }

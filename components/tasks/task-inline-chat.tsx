@@ -1,9 +1,11 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import { LiteMarkdownText } from "@/components/chat/message-body-with-mentions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { useRealtimeEvents } from "@/hooks/use-realtime-events"
 import { cn } from "@/lib/utils"
 import type { ChatMessage } from "@/types/portal"
 
@@ -32,6 +34,14 @@ export function TaskInlineChat({ taskId, currentUserId }: TaskInlineChatProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const loadMessages = useCallback(async (id: string) => {
+    const msgRes = await fetch(`/api/chat/channels/${id}/messages`)
+    if (msgRes.ok) {
+      const msgData = (await msgRes.json()) as { items: ChatMessage[] }
+      setMessages(msgData.items)
+    }
+  }, [])
+
   const initChat = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -47,31 +57,36 @@ export function TaskInlineChat({ taskId, currentUserId }: TaskInlineChatProps) {
         return
       }
       setChannelId(chatData.channelId)
-      const msgRes = await fetch(`/api/chat/channels/${chatData.channelId}/messages`)
-      if (msgRes.ok) {
-        const msgData = (await msgRes.json()) as { items: ChatMessage[] }
-        setMessages(msgData.items)
-      }
+      await loadMessages(chatData.channelId)
     } finally {
       setLoading(false)
     }
-  }, [taskId])
+  }, [taskId, loadMessages])
 
   useEffect(() => {
     void initChat()
   }, [initChat])
 
-  useEffect(() => {
-    if (!channelId) return
-    const timer = setInterval(async () => {
-      const res = await fetch(`/api/chat/channels/${channelId}/messages`)
-      if (res.ok) {
-        const data = (await res.json()) as { items: ChatMessage[] }
-        setMessages(data.items)
+  useRealtimeEvents({
+    enabled: Boolean(channelId),
+    onEvent: (event) => {
+      if (!channelId || !("channelId" in event) || event.channelId !== channelId) return
+      if (event.type === "message.new") {
+        setMessages((prev) =>
+          prev.some((item) => item.id === event.message.id) ? prev : [...prev, event.message]
+        )
+      } else if (event.type === "message.updated") {
+        setMessages((prev) =>
+          prev.map((item) => (item.id === event.message.id ? event.message : item))
+        )
+      } else if (event.type === "message.deleted") {
+        setMessages((prev) => prev.filter((item) => item.id !== event.messageId))
       }
-    }, 5000)
-    return () => clearInterval(timer)
-  }, [channelId])
+    },
+    onFallbackPoll: () => {
+      if (channelId) void loadMessages(channelId)
+    },
+  })
 
   const sendMessage = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -84,7 +99,9 @@ export function TaskInlineChat({ taskId, currentUserId }: TaskInlineChatProps) {
     if (!res.ok) return
     setBody("")
     const data = (await res.json()) as { item: ChatMessage }
-    setMessages((prev) => [...prev, data.item])
+    setMessages((prev) =>
+      prev.some((item) => item.id === data.item.id) ? prev : [...prev, data.item]
+    )
   }
 
   if (loading) {
@@ -103,38 +120,32 @@ export function TaskInlineChat({ taskId, currentUserId }: TaskInlineChatProps) {
   }
 
   return (
-    <div className="flex h-[320px] flex-col rounded-md border">
+    <div className="flex h-[320px] flex-col rounded-lg border">
       <ScrollArea className="flex-1 p-3">
-        {messages.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Сообщений пока нет</p>
-        ) : (
-          <div className="space-y-2">
-            {messages.map((message) => {
-              if (message.messageType === "system" || message.messageType === "task_created") {
-                return (
-                  <p key={message.id} className="text-center text-xs text-muted-foreground">
-                    {message.body}
-                  </p>
-                )
-              }
-              const isMine = message.authorId === currentUserId
+        <div className="space-y-2">
+          {messages.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Пока нет сообщений</p>
+          ) : (
+            messages.map((message) => {
+              const mine = message.authorId === currentUserId
               return (
                 <div
                   key={message.id}
                   className={cn(
-                    "max-w-[90%] rounded-lg px-2 py-1.5 text-sm",
-                    isMine ? "ml-auto bg-primary text-primary-foreground" : "bg-muted"
+                    "max-w-[90%] rounded-lg px-3 py-2 text-sm",
+                    mine ? "ml-auto bg-primary text-primary-foreground" : "bg-muted"
                   )}
                 >
-                  <div className="text-[10px] opacity-70">
-                    {isMine ? "Вы" : message.authorName} · {formatTime(message.createdAt)}
+                  <div className="flex justify-between gap-2 text-[11px] opacity-80">
+                    <span>{mine ? "Вы" : message.authorName}</span>
+                    <span>{formatTime(message.createdAt)}</span>
                   </div>
-                  <p className="whitespace-pre-wrap">{message.body}</p>
+                  <LiteMarkdownText text={message.body} className="mt-1" />
                 </div>
               )
-            })}
-          </div>
-        )}
+            })
+          )}
+        </div>
       </ScrollArea>
       <form onSubmit={sendMessage} className="flex gap-2 border-t p-2">
         <Input

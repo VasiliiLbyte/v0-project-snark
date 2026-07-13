@@ -1,10 +1,10 @@
 import { eq } from "drizzle-orm"
 import { NextResponse } from "next/server"
-import { findDevUser } from "@/lib/auth/dev-users"
-import { useMockAuth } from "@/lib/auth/mock-mode"
+import { findMockAuthUser } from "@/lib/auth/mock-users"
 import { mockCreateSession } from "@/lib/auth/mock-session"
 import { verifyPassword } from "@/lib/auth/password"
 import { createSession, getRefreshTokenExpiryDate } from "@/lib/auth/session"
+import { isMockAuth } from "@/lib/config/mode"
 import {
   ACCESS_TOKEN_COOKIE,
   ACCESS_TOKEN_TTL_SECONDS,
@@ -35,39 +35,51 @@ export async function POST(request: Request) {
 
     const { email, password } = parsed.data
 
-    if (useMockAuth()) {
-      const devUser = findDevUser(email, password)
-      if (!devUser) {
+    if (isMockAuth()) {
+      const mockUser = findMockAuthUser(email, password)
+      if (!mockUser) {
         return NextResponse.json({ error: INVALID_CREDENTIALS_MESSAGE }, { status: 401 })
       }
-      if (!devUser.isActive) {
+      if (!mockUser.isActive) {
         return NextResponse.json({ error: "Аккаунт деактивирован" }, { status: 403 })
       }
 
       const accessPayload: Pick<AccessTokenPayload, "userId" | "email" | "role"> = {
-        userId: devUser.id,
-        email: devUser.email,
-        role: devUser.role,
+        userId: mockUser.id,
+        email: mockUser.email,
+        role: mockUser.role,
       }
       const accessToken = generateAccessToken(accessPayload)
-      const refreshToken = generateRefreshToken({ userId: devUser.id })
-      await mockCreateSession({ userId: devUser.id, refreshToken, expiresAt: getRefreshTokenExpiryDate() })
+      const refreshToken = generateRefreshToken({ userId: mockUser.id })
+      await mockCreateSession({
+        userId: mockUser.id,
+        refreshToken,
+        expiresAt: getRefreshTokenExpiryDate(),
+      })
 
       const response = NextResponse.json({
         accessToken,
         user: {
-          id: devUser.id,
-          email: devUser.email,
-          firstName: devUser.firstName,
-          lastName: devUser.lastName,
-          role: devUser.role,
-          departmentId: devUser.departmentId,
-          isActive: devUser.isActive,
+          id: mockUser.id,
+          email: mockUser.email,
+          firstName: mockUser.firstName,
+          lastName: mockUser.lastName,
+          role: mockUser.role,
+          departmentId: mockUser.departmentId,
+          isActive: mockUser.isActive,
         },
-        role: devUser.role,
+        role: mockUser.role,
       })
-      response.cookies.set(REFRESH_TOKEN_COOKIE, refreshToken, validateCookieConfig(REFRESH_TOKEN_TTL_SECONDS))
-      response.cookies.set(ACCESS_TOKEN_COOKIE, accessToken, validateCookieConfig(ACCESS_TOKEN_TTL_SECONDS))
+      response.cookies.set(
+        REFRESH_TOKEN_COOKIE,
+        refreshToken,
+        validateCookieConfig(REFRESH_TOKEN_TTL_SECONDS)
+      )
+      response.cookies.set(
+        ACCESS_TOKEN_COOKIE,
+        accessToken,
+        validateCookieConfig(ACCESS_TOKEN_TTL_SECONDS)
+      )
       return response
     }
 

@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { User, Menu, LogOut } from "lucide-react"
 import { BrandLogo } from "@/components/brand-logo"
+import { NotificationBell } from "@/components/notifications/notification-bell"
 import { useAuth } from "@/hooks/use-auth"
 
 interface HeaderProps {
@@ -58,8 +59,10 @@ export function Header({ onMenuClick }: HeaderProps) {
           </Link>
         </div>
 
-        {/* Right: User profile + logout */}
+        {/* Right: notifications + user profile + logout */}
         <div className="flex items-center gap-1 md:gap-2">
+          <NotificationBell />
+
           <div className="flex items-center gap-2 md:gap-3">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent">
               <User className="h-4 w-4 text-white" aria-hidden="true" />

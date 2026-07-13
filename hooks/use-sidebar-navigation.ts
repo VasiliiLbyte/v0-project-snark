@@ -10,8 +10,22 @@ export function useSidebarNavigation() {
   useEffect(() => {
     let mounted = true
     ;(async () => {
-      const result = await getPortalRepository().getSidebarItems()
-      if (mounted) setItems(result)
+      const [result, statsRes] = await Promise.all([
+        getPortalRepository().getSidebarItems(),
+        fetch("/api/tasks/stats").catch(() => null),
+      ])
+      let overdueCount = 0
+      if (statsRes?.ok) {
+        const stats = (await statsRes.json()) as { overdueCount?: number }
+        overdueCount = Number(stats.overdueCount ?? 0)
+      }
+      if (mounted) {
+        setItems(
+          result.map((item) =>
+            item.id === "tasks" && overdueCount > 0 ? { ...item, badge: overdueCount } : item
+          )
+        )
+      }
     })()
     return () => {
       mounted = false

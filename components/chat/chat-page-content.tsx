@@ -3,7 +3,8 @@
 import Link from "next/link"
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { CheckSquare, ClipboardList, MessageSquare, UserPlus, Users } from "lucide-react"
+import { CheckSquare, ClipboardList, MessageSquare, Pencil, Trash2, UserPlus, Users } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import { EmployeePicker } from "@/components/shared/employee-picker"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -18,6 +19,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
+import { MessageBodyWithMentions } from "@/components/chat/message-body-with-mentions"
+import { useRealtimeEvents } from "@/hooks/use-realtime-events"
+import { extractMentionUserIds } from "@/lib/mentions/parse"
 import { cn } from "@/lib/utils"
 import type {
   ChatChannel,
@@ -26,11 +30,13 @@ import type {
   Employee,
   PortalTask,
 } from "@/types/portal"
+import type { UserRole } from "@/types/auth"
 
 interface ChatPageContentProps {
   initial: ChatChannelsListResponse
   employees: Employee[]
   currentUserId: string
+  currentUserRole: UserRole
 }
 
 function formatTime(value: string): string {
@@ -52,7 +58,12 @@ function channelTitle(channel: ChatChannel): string {
   return channel.name ?? "Групповой чат"
 }
 
-export function ChatPageContent({ initial, employees, currentUserId }: ChatPageContentProps) {
+export function ChatPageContent({
+  initial,
+  employees,
+  currentUserId,
+  currentUserRole,
+}: ChatPageContentProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [pending, startTransition] = useTransition()
@@ -61,6 +72,7 @@ export function ChatPageContent({ initial, employees, currentUserId }: ChatPageC
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [messageBody, setMessageBody] = useState("")
   const [groupName, setGroupName] = useState("")
+  const [groupMemberIds, setGroupMemberIds] = useState<string[]>([])
   const [employeeSearch, setEmployeeSearch] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loadingMessages, setLoadingMessages] = useState(false)
@@ -74,6 +86,12 @@ export function ChatPageContent({ initial, employees, currentUserId }: ChatPageC
   const [memberPickerOpen, setMemberPickerOpen] = useState(false)
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null)
   const [addingMember, setAddingMember] = useState(false)
+  const [createMemberPick, setCreateMemberPick] = useState<string | null>(null)
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
+  const [editingBody, setEditingBody] = useState("")
+  const [removeMemberId, setRemoveMemberId] = useState<string | null>(null)
+  const [mentionOpen, setMentionOpen] = useState(false)
+  const [mentionQuery, setMentionQuery] = useState("")
 
   const colleagues = useMemo(
     () => employees.filter((employee) => employee.userId !== currentUserId),
@@ -138,13 +156,66 @@ export function ChatPageContent({ initial, employees, currentUserId }: ChatPageC
     return data.items
   }, [])
 
-  useEffect(() => {
-    const timer = setInterval(() => {
+  useRealtimeEvents({
+    onEvent: (event) => {
+      if (event.type === "connected") return
+      if (event.type === "channel.updated" || event.type === "notification.new") {
+        void refreshChannels()
+        return
+      }
+      if (!("channelId" in event) || event.channelId !== activeChannelId) {
+        if (event.type === "message.new") void refreshChannels()
+        return
+      }
+      if (event.type === "message.new") {
+        setMessages((prev) =>
+          prev.some((item) => item.id === event.message.id) ? prev : [...prev, event.message]
+        )
+        void refreshChannels()
+      } else if (event.type === "message.updated") {
+        setMessages((prev) =>
+          prev.map((item) => (item.id === event.message.id ? event.message : item))
+        )
+      } else if (event.type === "message.deleted") {
+        setMessages((prev) => prev.filter((item) => item.id !== event.messageId))
+      }
+    },
+    onFallbackPoll: () => {
       if (activeChannelId) void loadMessages(activeChannelId, true)
       void refreshChannels()
-    }, 5000)
-    return () => clearInterval(timer)
-  }, [activeChannelId, loadMessages, refreshChannels])
+    },
+  })
+
+  const mentionCandidates = useMemo(() => {
+    const query = mentionQuery.trim().toLowerCase()
+    return colleagues
+      .filter((employee) => !query || employee.name.toLowerCase().includes(query))
+      .slice(0, 8)
+  }, [colleagues, mentionQuery])
+
+  const handleComposerChange = (value: string) => {
+    setMessageBody(value)
+    const at = value.lastIndexOf("@")
+    if (at >= 0 && (at === 0 || /\s/.test(value[at - 1] ?? ""))) {
+      const after = value.slice(at + 1)
+      if (!after.includes(" ") || after.split(" ").length <= 2) {
+        setMentionOpen(true)
+        setMentionQuery(after)
+        return
+      }
+    }
+    setMentionOpen(false)
+    setMentionQuery("")
+  }
+
+  const insertMention = (name: string) => {
+    const at = messageBody.lastIndexOf("@")
+    if (at < 0) return
+    const next = `${messageBody.slice(0, at)}@${name} `
+    setMessageBody(next)
+    setMentionOpen(false)
+    setMentionQuery("")
+  }
 
   const openDirectChat = useCallback(
     async (peerId: string) => {
@@ -199,7 +270,7 @@ export function ChatPageContent({ initial, employees, currentUserId }: ChatPageC
       body: JSON.stringify({
         type: "group",
         name: groupName.trim() || "Общий чат",
-        memberIds: selectedMemberId ? [selectedMemberId] : [],
+        memberIds: groupMemberIds,
       }),
     })
     if (!response.ok) {
@@ -209,7 +280,8 @@ export function ChatPageContent({ initial, employees, currentUserId }: ChatPageC
     }
     const body = (await response.json()) as { item: ChatChannel }
     setGroupName("")
-    setSelectedMemberId(null)
+    setGroupMemberIds([])
+    setCreateMemberPick(null)
     await refreshChannels()
     setActiveChannelId(body.item.id)
     startTransition(() => router.refresh())
@@ -238,16 +310,84 @@ export function ChatPageContent({ initial, employees, currentUserId }: ChatPageC
     }
   }
 
+  const removeMemberFromGroup = async () => {
+    if (!activeChannelId || !removeMemberId) return
+    setAddingMember(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/chat/channels/${activeChannelId}/members`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ memberIds: [removeMemberId] }),
+      })
+      const body = (await response.json().catch(() => ({}))) as { error?: string }
+      if (!response.ok) {
+        setError(body.error ?? "Не удалось удалить участника")
+        return
+      }
+      setRemoveMemberId(null)
+      await refreshChannels()
+    } finally {
+      setAddingMember(false)
+    }
+  }
+
+  const canEditOrDeleteMessage = (message: ChatMessage) => {
+    if (message.authorId !== currentUserId) return false
+    if (currentUserRole === "admin" || currentUserRole === "hr_manager") return true
+    return Date.now() - new Date(message.createdAt).getTime() <= 15 * 60 * 1000
+  }
+
+  const saveEditedMessage = async () => {
+    if (!activeChannelId || !editingMessageId || !editingBody.trim()) return
+    const response = await fetch(
+      `/api/chat/channels/${activeChannelId}/messages/${editingMessageId}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ body: editingBody.trim() }),
+      }
+    )
+    if (!response.ok) {
+      const body = (await response.json().catch(() => ({}))) as { error?: string }
+      setError(body.error ?? "Не удалось изменить сообщение")
+      return
+    }
+    setEditingMessageId(null)
+    setEditingBody("")
+    await loadMessages(activeChannelId, true)
+  }
+
+  const removeMessage = async (messageId: string) => {
+    if (!activeChannelId) return
+    if (!confirm("Удалить сообщение?")) return
+    const response = await fetch(`/api/chat/channels/${activeChannelId}/messages/${messageId}`, {
+      method: "DELETE",
+    })
+    if (!response.ok) {
+      const body = (await response.json().catch(() => ({}))) as { error?: string }
+      setError(body.error ?? "Не удалось удалить сообщение")
+      return
+    }
+    await loadMessages(activeChannelId, true)
+  }
+
   const sendMessage = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!activeChannelId || !messageBody.trim()) return
     setError(null)
+    const mentionCandidatesList = colleagues.map((employee) => ({
+      userId: employee.userId,
+      name: employee.name,
+    }))
+    const mentionIds = extractMentionUserIds(messageBody.trim(), mentionCandidatesList)
     const response = await fetch(`/api/chat/channels/${activeChannelId}/messages`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         body: messageBody.trim(),
         replyToId: replyTo?.id ?? null,
+        mentionIds,
       }),
     })
     if (!response.ok) {
@@ -257,6 +397,7 @@ export function ChatPageContent({ initial, employees, currentUserId }: ChatPageC
     }
     setMessageBody("")
     setReplyTo(null)
+    setMentionOpen(false)
     await loadMessages(activeChannelId, true)
     await refreshChannels()
   }
@@ -347,10 +488,16 @@ export function ChatPageContent({ initial, employees, currentUserId }: ChatPageC
     }
 
     const isMine = message.authorId === currentUserId
+    const canManage = canEditOrDeleteMessage(message)
+    const isEditing = editingMessageId === message.id
+
     return (
       <div
         key={message.id}
-        className={cn("group max-w-[85%] rounded-lg px-3 py-2", isMine ? "ml-auto bg-primary text-primary-foreground" : "bg-muted")}
+        className={cn(
+          "group max-w-[85%] rounded-lg px-3 py-2",
+          isMine ? "ml-auto bg-primary text-primary-foreground" : "bg-muted"
+        )}
       >
         {message.replyToBody ? (
           <div
@@ -369,32 +516,99 @@ export function ChatPageContent({ initial, employees, currentUserId }: ChatPageC
           )}
         >
           <span className="font-medium">{isMine ? "Вы" : message.authorName}</span>
-          <span>{formatTime(message.createdAt)}</span>
+          <span>
+            {formatTime(message.createdAt)}
+            {message.editedAt ? " · изм." : ""}
+          </span>
         </div>
-        <p className="mt-1 whitespace-pre-wrap text-sm">{message.body}</p>
-        {!isMine && activeChannel?.type !== "task" ? (
-          <div className="mt-2 flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-            <Button
-              type="button"
-              size="sm"
-              variant={isMine ? "secondary" : "outline"}
-              className="h-7 text-xs"
-              onClick={() => setReplyTo(message)}
-            >
-              Ответить
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={isMine ? "secondary" : "outline"}
-              className="h-7 text-xs"
-              onClick={() => openCreateTaskDialog(message)}
-            >
-              <CheckSquare className="mr-1 h-3 w-3" />
-              Задача
-            </Button>
+        {isEditing ? (
+          <div className="mt-2 space-y-2">
+            <Textarea
+              value={editingBody}
+              onChange={(event) => setEditingBody(event.target.value)}
+              rows={3}
+              className="bg-background text-foreground"
+            />
+            <div className="flex gap-2">
+              <Button type="button" size="sm" onClick={() => void saveEditedMessage()}>
+                Сохранить
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setEditingMessageId(null)
+                  setEditingBody("")
+                }}
+              >
+                Отмена
+              </Button>
+            </div>
           </div>
-        ) : null}
+        ) : (
+          <MessageBodyWithMentions
+            body={message.body}
+            employees={colleagues.map((employee) => ({
+              userId: employee.userId,
+              name: employee.name,
+            }))}
+          />
+        )}
+        <div className="mt-2 flex flex-wrap gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+          {!isMine ? (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                onClick={() => setReplyTo(message)}
+              >
+                Ответить
+              </Button>
+              {activeChannel?.type !== "task" ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  onClick={() => openCreateTaskDialog(message)}
+                >
+                  <CheckSquare className="mr-1 h-3 w-3" />
+                  Задача
+                </Button>
+              ) : null}
+            </>
+          ) : null}
+          {canManage && !isEditing ? (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                variant={isMine ? "secondary" : "outline"}
+                className="h-7 text-xs"
+                onClick={() => {
+                  setEditingMessageId(message.id)
+                  setEditingBody(message.body)
+                }}
+              >
+                <Pencil className="mr-1 h-3 w-3" />
+                Изменить
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={isMine ? "secondary" : "outline"}
+                className="h-7 text-xs"
+                onClick={() => void removeMessage(message.id)}
+              >
+                <Trash2 className="mr-1 h-3 w-3" />
+                Удалить
+              </Button>
+            </>
+          ) : null}
+        </div>
       </div>
     )
   }
@@ -491,12 +705,42 @@ export function ChatPageContent({ initial, employees, currentUserId }: ChatPageC
             onChange={(event) => setGroupName(event.target.value)}
             placeholder="Название группового чата"
           />
-          <EmployeePicker
-            employees={colleagues}
-            value={selectedMemberId}
-            onChange={setSelectedMemberId}
-            placeholder="Добавить участника (необязательно)"
-          />
+          <div className="flex flex-wrap gap-1">
+            {groupMemberIds.map((id) => {
+              const employee = employees.find((item) => item.userId === id)
+              return (
+                <Badge key={id} variant="secondary" className="gap-1">
+                  {employee?.name ?? id}
+                  <button
+                    type="button"
+                    onClick={() => setGroupMemberIds((prev) => prev.filter((item) => item !== id))}
+                  >
+                    ×
+                  </button>
+                </Badge>
+              )
+            })}
+          </div>
+          <div className="flex gap-2">
+            <EmployeePicker
+              employees={colleagues.filter((employee) => !groupMemberIds.includes(employee.userId))}
+              value={createMemberPick}
+              onChange={setCreateMemberPick}
+              placeholder="Участники группы"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                if (createMemberPick && !groupMemberIds.includes(createMemberPick)) {
+                  setGroupMemberIds((prev) => [...prev, createMemberPick])
+                  setCreateMemberPick(null)
+                }
+              }}
+            >
+              +
+            </Button>
+          </div>
           <Button className="w-full" variant="outline" onClick={createGroup} disabled={pending}>
             Создать групповой чат
           </Button>
@@ -530,15 +774,25 @@ export function ChatPageContent({ initial, employees, currentUserId }: ChatPageC
             </div>
             {activeChannel &&
             (activeChannel.type === "group" || activeChannel.type === "department") ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setMemberPickerOpen(true)}
-              >
-                <UserPlus className="mr-1 h-4 w-4" />
-                Добавить
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setMemberPickerOpen(true)}
+                >
+                  <UserPlus className="mr-1 h-4 w-4" />
+                  Добавить
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setRemoveMemberId("__pick__")}
+                >
+                  Удалить участника
+                </Button>
+              </div>
             ) : null}
           </div>
         </div>
@@ -566,13 +820,29 @@ export function ChatPageContent({ initial, employees, currentUserId }: ChatPageC
           </div>
         ) : null}
 
-        <form onSubmit={sendMessage} className="mt-4 flex gap-2 border-t pt-4">
-          <Input
-            value={messageBody}
-            onChange={(event) => setMessageBody(event.target.value)}
-            placeholder="Напишите сообщение..."
-            disabled={!activeChannelId}
-          />
+        <form onSubmit={sendMessage} className="relative mt-4 flex gap-2 border-t pt-4">
+          <div className="relative min-w-0 flex-1">
+            {mentionOpen && mentionCandidates.length > 0 ? (
+              <div className="absolute bottom-full left-0 z-20 mb-1 max-h-40 w-full overflow-y-auto rounded-md border bg-popover p-1 shadow-md">
+                {mentionCandidates.map((employee) => (
+                  <button
+                    key={employee.userId}
+                    type="button"
+                    className="flex w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
+                    onClick={() => insertMention(employee.name)}
+                  >
+                    @{employee.name}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <Input
+              value={messageBody}
+              onChange={(event) => handleComposerChange(event.target.value)}
+              placeholder="Напишите сообщение… @имя для упоминания"
+              disabled={!activeChannelId}
+            />
+          </div>
           <Button type="submit" disabled={!activeChannelId || !messageBody.trim()}>
             Отправить
           </Button>
@@ -638,6 +908,38 @@ export function ChatPageContent({ initial, employees, currentUserId }: ChatPageC
               disabled={!selectedMemberId || addingMember}
             >
               Добавить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={removeMemberId !== null}
+        onOpenChange={(open) => !open && setRemoveMemberId(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Удалить участника</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <EmployeePicker
+              employees={colleagues}
+              value={removeMemberId === "__pick__" ? null : removeMemberId}
+              onChange={setRemoveMemberId}
+              placeholder="Кого убрать из чата"
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setRemoveMemberId(null)}>
+              Отмена
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void removeMemberFromGroup()}
+              disabled={!removeMemberId || removeMemberId === "__pick__" || addingMember}
+            >
+              Удалить
             </Button>
           </DialogFooter>
         </DialogContent>

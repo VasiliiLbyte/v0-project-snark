@@ -27,37 +27,53 @@ export interface RefreshTokenPayload extends JwtPayload {
   userId: string
 }
 
-function getExpectedCookiePolicy() {
-  if (process.env.NODE_ENV === "production") {
-    return { secure: true, sameSite: "strict" as CookieSameSite, httpOnly: true as const }
-  }
-
-  return { secure: false, sameSite: "lax" as CookieSameSite, httpOnly: true as const }
+export interface CookieEnv {
+  NODE_ENV?: string
+  COOKIE_SECURE?: string
 }
 
-export function validateCookieConfig(maxAge: number): AuthCookieConfig {
-  const expected = getExpectedCookiePolicy()
+/** Чистая функция для тестов и рантайма. */
+export function resolveCookieSecure(env: CookieEnv = process.env): boolean {
+  if (env.COOKIE_SECURE === "true") return true
+  if (env.COOKIE_SECURE === "false") return false
+  return env.NODE_ENV === "production"
+}
+
+function getSameSite(env: CookieEnv = process.env): CookieSameSite {
+  return env.NODE_ENV === "production" ? "strict" : "lax"
+}
+
+export function validateCookieConfig(
+  maxAge: number,
+  env: CookieEnv = process.env
+): AuthCookieConfig {
+  const secure = resolveCookieSecure(env)
+  const sameSite = getSameSite(env)
   const config: AuthCookieConfig = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+    secure,
+    sameSite,
     path: "/",
     maxAge,
   }
 
-  const isUnsafe =
-    config.httpOnly !== expected.httpOnly ||
-    config.secure !== expected.secure ||
-    config.sameSite !== expected.sameSite
-
-  if (isUnsafe && !cookieConfigWarningShown) {
+  if (
+    env.NODE_ENV === "production" &&
+    env.COOKIE_SECURE === "false" &&
+    !cookieConfigWarningShown
+  ) {
     cookieConfigWarningShown = true
     console.warn(
-      `[auth] Небезопасная cookie-конфигурация: expected secure=${expected.secure}, sameSite=${expected.sameSite}, httpOnly=${expected.httpOnly}; got secure=${config.secure}, sameSite=${config.sameSite}, httpOnly=${config.httpOnly}`
+      "[auth] COOKIE_SECURE=false при NODE_ENV=production: cookies без Secure (допустимо только за HTTP без TLS)."
     )
   }
 
   return config
+}
+
+/** Сброс флага предупреждения (unit-тесты). */
+export function resetCookieConfigWarningForTests(): void {
+  cookieConfigWarningShown = false
 }
 
 function getAccessSecret(): string {

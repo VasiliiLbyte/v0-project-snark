@@ -11,7 +11,7 @@ import {
   verifyToken,
   type RefreshTokenPayload,
 } from "@/lib/auth/tokens"
-import { useMockAuth } from "@/lib/auth/mock-mode"
+import { isMockAuth } from "@/lib/config/mode"
 import {
   getRefreshTokenExpiryDate,
   mockRotateSession,
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       return unauthorizedResponse()
     }
 
-    const session = useMockAuth()
+    const session = isMockAuth()
       ? await mockValidateSession(refreshToken)
       : await validateSession(refreshToken)
     if (!session || session.user.id !== decodedRefresh.userId) {
@@ -60,9 +60,9 @@ export async function POST(request: Request) {
 
     const nextAccessToken = generateAccessToken(accessPayload)
     const nextRefreshToken = generateRefreshToken({ userId: session.user.id })
-    const nextRefreshExpiresAt = useMockAuth() ? getRefreshTokenExpiryDate() : dbRefreshExpiry()
+    const nextRefreshExpiresAt = isMockAuth() ? getRefreshTokenExpiryDate() : dbRefreshExpiry()
 
-    if (useMockAuth()) {
+    if (isMockAuth()) {
       await mockRotateSession({
         sessionId: session.id,
         refreshToken: nextRefreshToken,
