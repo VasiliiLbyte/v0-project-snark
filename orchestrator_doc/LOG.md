@@ -15,7 +15,7 @@ Append-only. **Новые записи — строго сверху.** Дета
 - Аудит F1–F4 принят: незакоммиченный хаб, PM2 в docs vs NSSM на prod, мёртвый CI в `services/protocols/.github/`
 - PROGRESS разбит на hot/archive/LOG; DEPLOY переписан под NSSM
 - ORCHESTRATOR + mdc обновлены; относительные пути
-- `git commit` `d41ff3d` (push — после «go» оператора)
+- Commit `docs(orchestrator): ... [2026-07-15-CORR]` создан локально; push — после «go» оператора
 
 **Инциденты / откат:**
 - Нет runtime-инцидентов (только документация)
