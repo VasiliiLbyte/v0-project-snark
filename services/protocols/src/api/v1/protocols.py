@@ -21,9 +21,9 @@ from urllib.parse import quote
 
 import structlog
 from celery.result import AsyncResult
+from docx import Document
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
-from docx import Document
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.celery_app import celery_app

@@ -71,7 +71,10 @@ class Settings(BaseSettings):
     yandex_gpt_folder_id: str = Field(default="")
     yandex_gpt_model_name: str = Field(
         default="yandexgpt-lite",
-        description="Имя модели в URI gpt://<folder>/<name>/latest (yandexgpt-lite, yandexgpt, ...).",
+        description=(
+            "Имя модели в URI gpt://<folder>/<name>/latest "
+            "(yandexgpt-lite, yandexgpt, ...)."
+        ),
     )
     gigachat_credentials: str = Field(default="")
     gigachat_scope: str = Field(default="GIGACHAT_API_PERS")

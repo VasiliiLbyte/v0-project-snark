@@ -14,7 +14,7 @@ from typing import Any
 
 import structlog
 from cryptography.fernet import Fernet
-from fastapi import Depends, HTTPException, status
+from fastapi import HTTPException, status
 
 from src.core.config import settings
 

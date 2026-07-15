@@ -247,7 +247,10 @@ class RAGService:
 
             expires_raw = token_data.get("expires_at")
             if isinstance(expires_raw, (int, float)):
-                deadline_wall = float(expires_raw) / 1000.0 if expires_raw > 1e12 else float(expires_raw)
+                if expires_raw > 1e12:
+                    deadline_wall = float(expires_raw) / 1000.0
+                else:
+                    deadline_wall = float(expires_raw)
                 ttl = max(60.0, deadline_wall - time.time())
             else:
                 ttl = float(token_data.get("expires_in", 1800))

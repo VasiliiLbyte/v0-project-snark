@@ -24,8 +24,11 @@ export function useRealtimeEvents({
 }: UseRealtimeEventsOptions): void {
   const onEventRef = useRef(onEvent)
   const onFallbackPollRef = useRef(onFallbackPoll)
-  onEventRef.current = onEvent
-  onFallbackPollRef.current = onFallbackPoll
+
+  useEffect(() => {
+    onEventRef.current = onEvent
+    onFallbackPollRef.current = onFallbackPoll
+  }, [onEvent, onFallbackPoll])
 
   useEffect(() => {
     if (!enabled) return

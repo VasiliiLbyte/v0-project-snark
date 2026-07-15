@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import date, datetime
 
 import structlog
-from sqlalchemy import select, func, update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 

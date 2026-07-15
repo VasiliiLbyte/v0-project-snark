@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      portal: ${{ steps.filter.outputs.portal }}
+      protocols: ${{ steps.filter.outputs.protocols }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect changed paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            portal:
+              - 'app/**'
+              - 'components/**'
+              - 'hooks/**'
+              - 'lib/**'
+              - 'types/**'
+              - 'tests/**'
+              - 'public/**'
+              - 'scripts/**'
+              - 'middleware.ts'
+              - 'instrumentation.ts'
+              - 'next.config.mjs'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'tsconfig.json'
+              - 'eslint.config.mjs'
+              - 'vitest.config.ts'
+              - 'drizzle.config.ts'
+              - 'postcss.config.mjs'
+              - 'components.json'
+              - 'docker-compose.yml'
+              - '.github/workflows/**'
+            protocols:
+              - 'services/protocols/**'
+              - '.github/workflows/**'
+
+  portal:
+    needs: changes
+    if: needs.changes.outputs.portal == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Lint
+        run: pnpm lint
+
+  protocols:
+    needs: changes
+    if: needs.changes.outputs.protocols == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dev tools
+        run: pip install ruff pytest pytest-asyncio
+
+      - name: Ruff check
+        working-directory: services/protocols
+        run: ruff check src/
+
+      - name: Pytest
+        working-directory: services/protocols
+        run: pytest || test $? -eq 5

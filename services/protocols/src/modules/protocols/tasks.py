@@ -13,7 +13,6 @@ from __future__ import annotations
 import asyncio
 
 import structlog
-from celery import shared_task
 
 from src.core.celery_app import celery_app
 from src.core.database import async_session_maker
@@ -146,6 +145,7 @@ def send_protocol_notification(protocol_id: int) -> dict:
                 return {"status": "no_telegram_id"}
 
             from aiogram import Bot
+
             from src.core.config import settings
 
             bot = Bot(token=settings.telegram_bot_token)
@@ -180,7 +180,7 @@ def _format_notification(protocol) -> str:  # type: ignore[no-untyped-def]
         HTML-форматированный текст сообщения.
     """
     lines = [
-        f"<b>Протокол совещания готов</b>",
+        "<b>Протокол совещания готов</b>",
         f"<b>{protocol.title}</b>",
         f"Дата: {protocol.meeting_date}",
         "",
@@ -289,6 +289,7 @@ def _send_reminder(
 
     async def _send() -> dict:
         from aiogram import Bot
+
         from src.core.config import settings
 
         bot = Bot(token=settings.telegram_bot_token)

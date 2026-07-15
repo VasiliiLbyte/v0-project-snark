@@ -14,14 +14,13 @@ import structlog
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.config import settings, STTProvider
+from src.core.config import STTProvider, settings
 from src.core.onec_connector import OneCConnector
 from src.core.rag import RAGService
-from src.core.security import encrypt_data, encrypt_file, decrypt_file
+from src.core.security import decrypt_file, encrypt_data
 from src.modules.protocols.models import ProtocolStatus
 from src.modules.protocols.repository import ProtocolRepository
 from src.modules.protocols.schemas import (
-    ActionItemSchema,
     MeetingProtocolSchema,
     SpeakerSegmentSchema,
     ToneAnalysisSchema,
@@ -527,7 +526,11 @@ class ProtocolService:
                     "text": item.text,
                     "assignee": item.assignee,
                     "deadline": item.deadline.isoformat() if item.deadline else None,
-                    "priority": item.priority.value if hasattr(item.priority, "value") else str(item.priority),
+                    "priority": (
+                        item.priority.value
+                        if hasattr(item.priority, "value")
+                        else str(item.priority)
+                    ),
                 }
                 for item in action_items
             ],
