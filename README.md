@@ -22,6 +22,20 @@
 
 ---
 
+## Оркестратор разработки
+
+Память проекта, playbook и промпты для AI-агентов — в [`orchestrator_doc/`](orchestrator_doc/README.md) (паттерн [muru-docs](https://github.com/VasiliiLbyte/muru-docs)).
+
+| Workspace | Назначение |
+|-----------|------------|
+| `orchestrator_doc/` | Чат-оркестратор: план, промпты, PROGRESS |
+| корень репо | Исполнитель portal (Plan mode) |
+| `services/protocols/` | Исполнитель protocols (Plan mode) |
+
+Стартовый промпт и workflow: [`orchestrator_doc/ORCHESTRATOR.md`](orchestrator_doc/ORCHESTRATOR.md).
+
+---
+
 ## Локальный запуск (разработка)
 
 **Требуется:** Node.js 22 LTS, pnpm, Docker Desktop, Python 3.12, ffmpeg (для видео).
@@ -160,7 +174,9 @@ ACL задач / членство канала с живым Postgres — отд
 
 ## Сервер (Windows, продакшен)
 
-На сервере всё нативное, **без Docker**: PostgreSQL, MinIO, Redis и Python-сервис протоколов — отдельные процессы; портал держит PM2.
+Сервер: `192.168.1.236`. На сервере всё нативное, **без Docker**: PostgreSQL, MinIO, Redis и Python-сервис протоколов — отдельные процессы; портал держит **NSSM**-сервис `snark-portal` (`next start -p 3000`).
+
+Подробный runbook: [`orchestrator_doc/DEPLOY.md`](orchestrator_doc/DEPLOY.md).
 
 ### Выкатка обновлений
 
@@ -170,15 +186,15 @@ git pull origin main
 pnpm install
 pnpm db:migrate
 pnpm build
-pm2 restart snark-portal
-# + перезапуск Python API, Celery worker
+nssm restart snark-portal
+# + перезапуск Python API и Celery worker
 ```
 
 ### Живёт только на сервере (нет в git)
 
 - `.env.local` — секреты портала
 - `services/protocols/.env.local` — секреты Python-сервиса
-- `ecosystem.config.js` — конфиг PM2
+- `.bat`-скрипт деплоя
 
 ---
 

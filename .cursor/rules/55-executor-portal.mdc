@@ -1,0 +1,51 @@
+---
+description: Executor mode — portal target, follow orchestrator prompts from orchestrator_doc hub
+alwaysApply: true
+---
+
+# SNARK Portal Executor Mode
+
+This workspace is the **snark-portal** executor (repo root). Work from orchestrator prompts (Plan mode). Platform memory lives in `orchestrator_doc/`.
+
+**Scope:** `app/`, `components/`, `lib/`, `hooks/`, `types/`, `tests/`, `middleware.ts`, root config — **not** `services/protocols/`.
+
+## Platform docs (read when prompt touches these areas)
+
+| Doc | Path |
+|---|---|
+| Hot progress | `orchestrator_doc/PROGRESS.md` |
+| Session log | `orchestrator_doc/LOG.md` |
+| Living spec | `orchestrator_doc/SPEC.md` |
+| Playbook / report template | `orchestrator_doc/ORCHESTRATOR.md` §4 |
+| API contract | `orchestrator_doc/API_CONTRACT.md` |
+| Deploy runbook | `orchestrator_doc/DEPLOY.md` |
+| Module TZ | `docs/TZ_MODULES_SNARK.md` |
+| Tasks/chat TZ | `docs/TZ_TASKS_CHAT_V2.md` |
+
+Read `orchestrator_doc/API_CONTRACT.md` before changing `app/api/protocols/*` or `lib/protocols/*`.
+
+## Execution rules
+
+- Follow the orchestrator prompt scope only — do not expand into unrelated refactors.
+- Plan mode: present plan → wait for approval → implement.
+- Server Components by default; Client Components only for interactivity.
+- Auth and role checks on server for every API route and sensitive page.
+- Do not touch `services/protocols/` — separate `snark-protocols` prompt.
+
+## Verify before reporting done
+
+```bash
+pnpm typecheck
+pnpm test
+# optional: pnpm lint
+```
+
+## Report back to orchestrator
+
+1. Changed files (paths)
+2. Command output (typecheck / test)
+3. Manual test result (if applicable)
+4. Risks / follow-ups
+5. Whether prod deploy is needed (`DEP-xxx` candidate)
+
+Existing rules in `.cursor/rules/` still apply.

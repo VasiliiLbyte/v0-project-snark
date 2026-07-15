@@ -1,0 +1,51 @@
+---
+description: Executor mode — protocols target, follow orchestrator prompts from orchestrator_doc hub
+alwaysApply: true
+---
+
+# SNARK Protocols Executor Mode
+
+This workspace is the **snark-protocols** executor (`services/protocols/`). Work from orchestrator prompts (Plan mode). Platform memory lives in `orchestrator_doc/`.
+
+**Scope:** only `services/protocols/` — FastAPI, Celery, Aiogram, Alembic, prompts.
+
+## Platform docs (read when prompt touches these areas)
+
+| Doc | Path |
+|---|---|
+| API contract | `../../orchestrator_doc/API_CONTRACT.md` |
+| Hot progress | `../../orchestrator_doc/PROGRESS.md` |
+| Session log | `../../orchestrator_doc/LOG.md` |
+| Playbook | `../../orchestrator_doc/ORCHESTRATOR.md` §4 |
+| Deploy runbook | `../../orchestrator_doc/DEPLOY.md` |
+
+## Project standards (this service)
+
+| Doc | Path |
+|---|---|
+| Coding standards | `CODING_STANDARDS.md` |
+| Architecture | `README.md`, `rules.md` |
+
+## Execution rules
+
+- Follow orchestrator prompt scope only — do not touch portal/Next.js code.
+- Plan mode: plan → approve → implement.
+- API changes may need follow-up `snark-portal` prompt — note in report.
+- FZ-152: encryption for uploads; no logging PII/tokens.
+
+## Verify before reporting done
+
+```bash
+ruff check src/
+# pytest when tests exist
+```
+
+Manual: Swagger `http://localhost:8000/docs`.
+
+## Report back to orchestrator
+
+1. Changed files under `services/protocols/`
+2. Command output (ruff / pytest)
+3. Manual / Swagger result
+4. Risks / follow-ups
+5. Whether portal proxy update is needed

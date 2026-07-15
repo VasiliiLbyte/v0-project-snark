@@ -7,19 +7,32 @@ alwaysApply: true
 
 ## 📁 Структура App Router
 app/
-├── (auth)/login/page.tsx # Авторизация (без layout портала)
-├── (main)/ # Защищённая зона
-│ ├── layout.tsx # Header + Sidebar + AuthGuard
-│ ├── dashboard/page.tsx # Главная: виджеты, активности, новости
-│ ├── employees/page.tsx # Справочник: поиск, фильтры, карточки
-│ ├── documents/page.tsx # Документы: категории, версии, доступ
-│ ├── requests/page.tsx # Заявки: шаблоны IT/HR/АХО
-│ └── admin/** # Только role: 'admin' | 'hr_manager'
-├── api/ # Route Handlers (/api/v1/...)
-├── lib/ # Утилиты, БД, S3, валидация
-├── components/ # Переиспользуемые компоненты
-├── hooks/ # Кастомные хуки
-└── types/ # TypeScript интерфейсы
+├── (auth)/login/page.tsx          # Авторизация (без layout портала)
+├── (main)/                        # Защищённая зона
+│   ├── layout.tsx                 # Header + Sidebar + AuthGuard
+│   ├── dashboard/page.tsx         # Главная: виджеты, активности, новости
+│   ├── contacts/page.tsx          # Справочник сотрудников
+│   ├── contacts/[id]/page.tsx     # Карточка сотрудника
+│   ├── structure/page.tsx         # Оргструктура (дерево)
+│   ├── documents/page.tsx         # Документы
+│   ├── news/page.tsx              # Новости
+│   ├── knowledge/page.tsx         # База знаний
+│   ├── protocols/page.tsx         # Протоколы совещаний
+│   ├── tasks/page.tsx             # Задачи
+│   ├── chat/page.tsx              # Внутренний чат
+│   ├── support/page.tsx           # Service Desk (заявки)
+│   ├── profile/page.tsx           # Профиль
+│   ├── calendar/page.tsx          # Календарь
+│   ├── booking/page.tsx           # Бронирование (заглушка)
+│   ├── about/page.tsx             # О компании
+│   └── admin/**                   # Только role: 'admin' | 'hr_manager'
+├── api/                           # Route Handlers
+├── lib/                           # Утилиты, БД, S3, валидация
+├── components/                    # Переиспользуемые компоненты
+├── hooks/                         # Кастомные хуки
+└── types/                         # TypeScript интерфейсы
+
+**Python-сервис протоколов:** `services/protocols/` (отдельный target оркестратора).
 
 ## ⚖️ Правила рендеринга
 - **Server Components** — по умолчанию. Используются для загрузки данных, рендеринга страниц, генерации мета-тегов.

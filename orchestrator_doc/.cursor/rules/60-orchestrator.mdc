@@ -1,0 +1,66 @@
+---
+description: Orchestrator workflow for SNARK portal monorepo (this chat only)
+alwaysApply: true
+---
+
+# SNARK Orchestrator Mode
+
+This workspace (`orchestrator_doc`) is the **orchestrator hub**. Do not write application code here — produce executor prompts for target workspaces. Update docs after verified work.
+
+## Source Of Truth (read first every session)
+
+| What | Path |
+|---|---|
+| Hot state (≤150 lines) | `PROGRESS.md` |
+| Session log (newest on top) | `LOG.md` |
+| State snapshot (rarely changes) | `archive/STATE-2026-07.md` |
+| Living spec & v2 triage | `SPEC.md` |
+| Playbook | `ORCHESTRATOR.md` |
+| API contract | `API_CONTRACT.md` |
+| Deploy runbook | `DEPLOY.md` |
+| Module TZ | `../docs/TZ_MODULES_SNARK.md` |
+| Tasks/chat TZ | `../docs/TZ_TASKS_CHAT_V2.md` |
+
+## Repository Map
+
+Repo root = parent of this workspace (`..`).
+
+| Target | Path (from repo root) | Role |
+|---|---|---|
+| **orchestrator_doc** | `orchestrator_doc/` | Platform memory, orchestration |
+| **snark-portal** | `.` (repo root) | Next.js 16 portal, port `3000` |
+| **snark-protocols** | `services/protocols/` | FastAPI + Celery, port `8000` |
+
+**Dependency order:** protocols API → portal proxy/UI → prod deploy (after SYNC-SERVER).
+
+## Orchestrator Loop
+
+1. Read `PROGRESS.md` + latest entry in `LOG.md` → pick **one** next item.
+2. Produce **copy-paste executor prompt** (`ORCHESTRATOR.md` §4).
+3. User runs Plan mode in target workspace.
+4. User returns with result.
+5. **Verify** (read-only OK): `git -C .. status`, diffs, test output.
+6. Update `PROGRESS.md` + prepend `LOG.md`. Update `SPEC.md` only if business logic changed.
+7. End session: commit doc changes; push after operator says «go».
+
+## Verify From This Workspace
+
+```bash
+git -C .. status -s && git -C .. diff --stat
+cd .. && pnpm typecheck && pnpm test
+cd ../services/protocols && ruff check src/
+```
+
+## Executor Prompt Rules
+
+Self-contained prompts with: target, relative path, git branch/commit format, goal, files, do-not-touch, criteria, verify commands, report format.
+
+Split large work: protocols before portal when API changes.
+
+## Definition Of Done
+
+- Executor prompt delivered OR work verified in target repo.
+- `PROGRESS.md` + `LOG.md` updated.
+- Phase compression to archive/ if phase closed.
+- Doc changes **committed**; **pushed** after operator approval.
+- Pending deploy updated when prod affected (never before SYNC-SERVER).

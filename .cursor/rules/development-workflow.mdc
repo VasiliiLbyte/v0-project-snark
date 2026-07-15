@@ -18,19 +18,25 @@ alwaysApply: true
 - Юнит-тесты: утилиты, хуки, схемы валидации
 - Интеграционные: API-маршруты, формы с реальными запросами
 - E2E (опционально): ключевые сценарии (вход, подача заявки, загрузка файла)
-- Перед пушем: `npm run lint && npm run typecheck && npm run test`
+- Перед пушем: `pnpm lint && pnpm typecheck && pnpm test`
 
 ## 🐘 Локальное окружение
 - БД: PostgreSQL через Docker (`docker-compose.yml`)
 - Файлы: MinIO (S3-совместимый) через Docker
 - Переменные: `.env.local` (игнорируется в Git), `.env.example` (коммитится)
-- Запуск: `npm run dev` → `http://localhost:3000`
+- Запуск: `pnpm dev` → `http://localhost:3000`
 
 ## 🤖 Использование Cursor AI
+
+### Оркестратор разработки
+- Хаб: `orchestrator_doc/` — память, playbook, промпты ([`orchestrator_doc/README.md`](../../orchestrator_doc/README.md))
+- Задачи и приоритеты: `orchestrator_doc/PROGRESS.md` + `orchestrator_doc/LOG.md`
+- Чат-оркестратор: workspace `orchestrator_doc/`, rule `60-orchestrator.mdc` — **не пишет код**
+- Исполнитель portal: этот репозиторий, Plan mode, rule `55-executor-portal.mdc`
+- Исполнитель protocols: `services/protocols/`, Plan mode, rule `55-executor-protocols.mdc`
+
+### Общие правила агента
 - Контекст: всегда ссылайся на `@rules/project-context` перед генерацией
-- Генерация компонентов: используй `@command generate-component`
-- Рефакторинг: `@prompt refactor-suggestion` + укажи файл и цель
-- Ревью PR: `@prompt review-pr` + ссылка на diff
 - Запрещено: генерировать полный файл без уточнения структуры, хардкодить данные, игнорировать типы
 
 ## 📋 Чек-лист перед слиянием
